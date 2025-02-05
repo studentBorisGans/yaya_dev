@@ -107,7 +107,7 @@ async def get_current_user(username: str, pw: str):
     try:
         async with pool.acquire() as conn:
             async with conn.cursor() as cursor:
-                await cursor.execute("SELECT user_id, username, name, email, location, language, gender, age, spend_class, notifications, music_service, established FROM user_data WHERE username = %s AND pw = %s;", (username, pw))
+                await cursor.execute("SELECT user_id, username, first_name, last_name, email, location, language, gender, age, spend_class, notifications, music_service, established FROM user_data WHERE username = %s AND pw = %s;", (username, pw))
                 response_data = await cursor.fetchone()
                 if not response_data:
                     raise HTTPException(status_code=401, detail="User not found")
