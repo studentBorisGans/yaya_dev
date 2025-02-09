@@ -1,5 +1,6 @@
 import asyncio
-import asyncpg
+import mysql.connector
+
 import grpc
 import time #faking DB write
 from concurrent import futures
@@ -9,27 +10,33 @@ import write_service_pb2_grpc
 from grpc_reflection.v1alpha import reflection
 from google.protobuf.timestamp_pb2 import Timestamp
 
-# db_pool = None
+def write_to_db(query: str, *values):
+    try:
+        connection = mysql.connector.connect(
+            user="root",
+            password="Root1234",
+            host="localhost",
+            database="yaya_dev"
+        )
+        cursor = connection.cursor()
+        cursor.execute(query, values)
+        connection.commit()
+        print("Data inserted successfully.")
 
-# async def init_db_pool():
-#     """
-#     Initialize the PostgreSQL async connection pool.
-#     """
-#     global db_pool
-#     db_pool = await asyncpg.create_pool(
-#         dsn="postgresql://user:password@localhost:5432/db_name",  # Adjust DSN
-#         min_size=3,  # Min connections
-#         max_size=5,  # Max connections
-#         timeout=30  # Connection timeout
-#     )
-#     print("✅ Database connection pool initialized.")
+        # Return the last inserted row ID
+        return cursor.lastrowid
+
+    except mysql.connector.Error as e:
+        print(f"Error: {e}")
+        return None
+
+    finally:
+        cursor.close()
+        connection.close()
+        print("\nConnection closed")
 
 class WriteService(write_service_pb2_grpc.WriteServiceServicer):
     def WriteData(self, request, context):
-        """
-        Handle database write request.
-        """
-        
         print(f"Received data: {request.data}")
 
         write_to_database(request.data)
@@ -37,9 +44,34 @@ class WriteService(write_service_pb2_grpc.WriteServiceServicer):
     
     def CreateEvent(self, request, context):
         print(f"Received data: {request.data}")
+        try:
+            datetime = request.data.date.ToDatetime()
+            iso = datetime.isoformat() + "Z"
+            mysql_datetime = datetime.fromisoformat(iso.replace('T', ' ').replace('Z', '')).strftime('%Y-%m-%d %H:%M:%S')
+            query = """
+                INSERT INTO event_data (organizer_id, venue_id, published, tagged, event_name, date, budget, pre_event_poster, pre_bio)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
+            """
+            values = (
+                request.data.org_id,
+                request.data.venue_id,
+                request.data.published,
+                request.data.tagged_bool,
+                request.data.name,
+                mysql_datetime,
+                request.data.budget,
+                request.data.pre_event_poster,
+                request.data.pre_bio
+            )
+            if write_to_db(query, *values) is None:
+                return write_service_pb2.CreateEventResponse(success=False, message="DB Error")
 
-        write_to_database(request.data)
-        return write_service_pb2.CreateEventResponse(success=True, message="djdjdj")
+            # write_to_database(request.data)
+            return write_service_pb2.CreateEventResponse(success=True, message="djdjdj")
+        except Exception as e:
+            print(f"Error writing to DB: {e}")
+            return write_service_pb2.CreateEventResponse(success=False, message=e)
+
 
 def write_to_database(data):
     time.sleep(2)
@@ -51,12 +83,6 @@ def write_to_database(data):
 
 # Run gRPC Server
 def serve():
-    # server = grpc.aio.server()
-    # write_service_pb2_grpc.add_WriteServiceServicer_to_server(WriteService(), server)
-    # server.add_insecure_port("[::]:50051")
-    # await server.start()
-    # print("gRPC server started on port 50051")
-    # await server.wait_for_termination()
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))  # 10 workers for concurrent requests
     write_service_pb2_grpc.add_WriteServiceServicer_to_server(WriteService(), server)
     SERVICE_NAMES = (
@@ -72,7 +98,7 @@ def serve():
     # Run the server indefinitely
     try:
         while True:
-            time.sleep(86400)  # Keep the server running
+            time.sleep(86400)
     except KeyboardInterrupt:
         server.stop(0)
 

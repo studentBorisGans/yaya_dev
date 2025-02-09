@@ -5,7 +5,6 @@ from typing import Dict, Optional
 from google.protobuf.timestamp_pb2 import Timestamp
 # from db_writes import write_service_pb2_grpc, write_service_pb2
 from db_writes import write_service_pb2, write_service_pb2_grpc
-import mysql.connector
 import grpc
 import os
 import asyncio
