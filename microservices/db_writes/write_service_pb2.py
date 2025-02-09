@@ -22,19 +22,26 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 _sym_db = _symbol_database.Default()
 
 
+from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13write_service.proto\x12\x05write\".\n\x0cWriteRequest\x12\x0c\n\x04\x64\x61ta\x18\x01 \x01(\t\x12\x10\n\x08priority\x18\x02 \x01(\x08\"\x1f\n\rWriteResponse\x12\x0e\n\x06status\x18\x01 \x01(\t2F\n\x0cWriteService\x12\x36\n\tWriteData\x12\x13.write.WriteRequest\x1a\x14.write.WriteResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13write_service.proto\x12\x05\x65vent\x1a\x1fgoogle/protobuf/timestamp.proto\"\x1c\n\x0cWriteRequest\x12\x0c\n\x04\x64\x61ta\x18\x01 \x01(\t\"\x1f\n\rWriteResponse\x12\x0e\n\x06status\x18\x01 \x01(\t\"\xf3\x01\n\tEventData\x12\x0e\n\x06org_id\x18\x01 \x01(\x05\x12\x10\n\x08venue_id\x18\x02 \x01(\x05\x12\x11\n\tpublished\x18\x03 \x01(\x08\x12\x13\n\x0btagged_bool\x18\x04 \x01(\x08\x12\x0c\n\x04name\x18\x05 \x01(\t\x12(\n\x04\x64\x61te\x18\x06 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x0e\n\x06\x62udget\x18\x07 \x01(\x02\x12\x1d\n\x10pre_event_poster\x18\x08 \x01(\tH\x00\x88\x01\x01\x12\x14\n\x07pre_bio\x18\t \x01(\tH\x01\x88\x01\x01\x42\x13\n\x11_pre_event_posterB\n\n\x08_pre_bio\"4\n\x12\x43reateEventRequest\x12\x1e\n\x04\x64\x61ta\x18\x01 \x01(\x0b\x32\x10.event.EventData\"7\n\x13\x43reateEventResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t2\x8e\x01\n\x0cWriteService\x12\x38\n\tWriteData\x12\x13.event.WriteRequest\x1a\x14.event.WriteResponse\"\x00\x12\x44\n\x0b\x43reateEvent\x12\x19.event.CreateEventRequest\x1a\x1a.event.CreateEventResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'write_service_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_WRITEREQUEST']._serialized_start=30
-  _globals['_WRITEREQUEST']._serialized_end=76
-  _globals['_WRITERESPONSE']._serialized_start=78
-  _globals['_WRITERESPONSE']._serialized_end=109
-  _globals['_WRITESERVICE']._serialized_start=111
-  _globals['_WRITESERVICE']._serialized_end=181
+  _globals['_WRITEREQUEST']._serialized_start=63
+  _globals['_WRITEREQUEST']._serialized_end=91
+  _globals['_WRITERESPONSE']._serialized_start=93
+  _globals['_WRITERESPONSE']._serialized_end=124
+  _globals['_EVENTDATA']._serialized_start=127
+  _globals['_EVENTDATA']._serialized_end=370
+  _globals['_CREATEEVENTREQUEST']._serialized_start=372
+  _globals['_CREATEEVENTREQUEST']._serialized_end=424
+  _globals['_CREATEEVENTRESPONSE']._serialized_start=426
+  _globals['_CREATEEVENTRESPONSE']._serialized_end=481
+  _globals['_WRITESERVICE']._serialized_start=484
+  _globals['_WRITESERVICE']._serialized_end=626
 # @@protoc_insertion_point(module_scope)

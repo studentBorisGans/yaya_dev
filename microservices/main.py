@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request, HTTPException, Depends, Body
 from jose import jwt, JWTError, ExpiredSignatureError
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
+from google.protobuf.timestamp_pb2 import Timestamp
 # from db_writes import write_service_pb2_grpc, write_service_pb2
 from db_writes import write_service_pb2, write_service_pb2_grpc
 import mysql.connector
@@ -33,6 +34,38 @@ grpc_channel = grpc.insecure_channel("localhost:50051")
 grpc_stub = write_service_pb2_grpc.WriteServiceStub(grpc_channel)
 
 WRITE_SERVICE_REST_URL = "http://localhost:8001/write/"  # FastAPI REST endpoint
+
+
+# WRITE DB OPERATIONS
+def handle_event(data):
+    date_str = data.get("date")
+    date_obj = datetime.fromisoformat(date_str.replace("Z", "+00:00"))  # Handle UTC format
+    timestamp = Timestamp()
+    timestamp.FromDatetime(date_obj)
+    data['date'] = timestamp
+    print(f"Sync data: {data}")
+
+
+    request = write_service_pb2.CreateEventRequest(data=data)
+    response = grpc_stub.CreateEvent(request)
+    return {"Success": response.success, "Message": response.message}
+
+def handle_venue(data):
+    request = write_service_pb2.WriteRequest(data=data)
+    response = grpc_stub.WriteData(request)
+    return {"status": response.status}
+
+def handle_user(data):
+    request = write_service_pb2.WriteRequest(data=data)
+    response = grpc_stub.WriteData(request)
+    return {"status": response.status}
+
+# Dictionary for O(1) lookup
+type_handlers = {
+    "event": handle_event,
+    "venue": handle_venue,
+    "user": handle_user,
+}
 
 
 
@@ -105,7 +138,7 @@ async def create_pool():
             db="yaya_dev",
             autocommit=True,
             minsize=1,
-            maxsize=10
+            maxsize=3
         )
         return pool
     except aiomysql.Error as e:
@@ -178,10 +211,19 @@ async def essential_write(data: dict):
     Calls the gRPC service for essential database writes.
     """
     print(f"Sync data: {data}")
+    
+    obj_type = data.get("type")
+    obj_data = data.get("data")
+    # timestamp = Timestamp()
+    # timestamp.GetCurrentTime()
+    # obj_data['date']
+    
+    handler = type_handlers.get(obj_type, lambda x: {"error": f"Unknown type: {obj_type}"})  
+    return handler(obj_data)
 
-    request = write_service_pb2.WriteRequest(data=data["data"], priority=True)
-    response = grpc_stub.WriteData(request)
-    return {"status": response.status}
+    # request = write_service_pb2.WriteRequest(data=data["data"])
+    # response = grpc_stub.WriteData(request)
+    # return {"status": response.status}
 
 @app.post("/background_write/")
 async def background_write(data: dict):
