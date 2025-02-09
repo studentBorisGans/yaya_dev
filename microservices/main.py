@@ -2,11 +2,14 @@ from fastapi import FastAPI, Request, HTTPException, Depends, Body
 from jose import jwt, JWTError, ExpiredSignatureError
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
+# from db_writes import write_service_pb2_grpc, write_service_pb2
+from db_writes import write_service_pb2, write_service_pb2_grpc
 import mysql.connector
 import grpc
 import os
 import asyncio
 import aiomysql
+import requests
 # switch to pyodbc or asyncodbc for azure SQL
 
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key")
@@ -22,6 +25,16 @@ sensitive_data = {}
 body_data = {}
 
 app = FastAPI()
+
+
+
+# gRPC Channel to the write microservice
+grpc_channel = grpc.insecure_channel("localhost:50051")
+grpc_stub = write_service_pb2_grpc.WriteServiceStub(grpc_channel)
+
+WRITE_SERVICE_REST_URL = "http://localhost:8001/write/"  # FastAPI REST endpoint
+
+
 
 def rotate_keys():
     SECRET_KEYS["previous"] = SECRET_KEYS["current"]  # Move current to previous
@@ -159,22 +172,41 @@ def protected(token: str):
 def refresh_key_manual():
     rotate_keys()
 
-
-@app.get("/")
-async def route_to_service(user: Dict = Depends(get_current_user)):
+@app.post("/essential_write/")
+async def essential_write(data: dict):
     """
-    Example route that authenticates user and forwards the request to another microservice via gRPC.
+    Calls the gRPC service for essential database writes.
     """
-    try:
-        # Example of calling a gRPC service (pseudo-code, replace with actual gRPC client call)
-        # async with grpc.aio.insecure_channel('localhost:50051') as channel:
-        #     stub = SomeServiceStub(channel)
-        #     response = await stub.SomeMethod(SomeRequest(user_id=user["id"]))
+    print(f"Sync data: {data}")
 
-        response_data = {"message": "Data from gRPC service", "user": user}
+    request = write_service_pb2.WriteRequest(data=data["data"], priority=True)
+    response = grpc_stub.WriteData(request)
+    return {"status": response.status}
+
+@app.post("/background_write/")
+async def background_write(data: dict):
+    """
+    Calls the REST API service for background writes.
+    """
+    print(f"Background data: {data}")
+    response = requests.post(WRITE_SERVICE_REST_URL, json={"data": data["data"], "priority": False})
+    return response.json()
+
+# @app.get("/")
+# async def route_to_service(user: Dict = Depends(get_current_user)):
+#     """
+#     Example route that authenticates user and forwards the request to another microservice via gRPC.
+#     """
+#     try:
+#         # Example of calling a gRPC service (pseudo-code, replace with actual gRPC client call)
+#         # async with grpc.aio.insecure_channel('localhost:50051') as channel:
+#         #     stub = SomeServiceStub(channel)
+#         #     response = await stub.SomeMethod(SomeRequest(user_id=user["id"]))
+
+#         response_data = {"message": "Data from gRPC service", "user": user}
         
-        # Encrypt response
-        encrypted_response = encode_jwt(response_data)
-        return {"data": encrypted_response}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+#         # Encrypt response
+#         encrypted_response = encode_jwt(response_data)
+#         return {"data": encrypted_response}
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")

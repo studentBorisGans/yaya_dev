@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package write;
+
+service WriteService {
+  rpc WriteData (WriteRequest) returns (WriteResponse);
+}
+
+message WriteRequest {
+  string data = 1;
+  bool priority = 2;
+}
+
+message WriteResponse {
+  string status = 1;
+}
