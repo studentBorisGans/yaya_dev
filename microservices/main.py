@@ -15,7 +15,7 @@ SECRET_KEYS = {
     "previous": "old_secret_key"
 }
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 10 #per half minute
+ACCESS_TOKEN_EXPIRE_MINUTES = 1 #per half minute
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 user_data = {}
 sensitive_data = {}
