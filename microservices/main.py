@@ -50,8 +50,10 @@ def handle_event(data):
     return {"Success": response.success, "Message": response.message}
 
 def handle_venue(data):
-    request = write_service_pb2.WriteRequest(data=data)
-    response = grpc_stub.WriteData(request)
+    print(f"Sync data: {data}")
+
+    request = write_service_pb2.CreateVenueRequest(data=data)
+    response = grpc_stub.CreateVenue(request)
     return {"Success": response.success, "Message": response.message}
 
 
@@ -69,13 +71,21 @@ def handle_dj(data):
     response = grpc_stub.CreateDj(request)
     return {"Success": response.success, "Message": response.message}
 
+def handle_org(data):
+    print(f"Sync data: {data}")
+
+    request = write_service_pb2.CreateOrganizerRequest(data=data)
+    response = grpc_stub.CreateOrganizer(request)
+    return {"Success": response.success, "Message": response.message}
+
 
 # Dictionary for O(1) lookup
 type_handlers = {
     "event": handle_event,
     "venue": handle_venue,
     "user": handle_user,
-    "dj": handle_dj
+    "dj": handle_dj,
+    "org": handle_org
 }
 
 

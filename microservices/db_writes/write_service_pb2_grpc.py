@@ -34,11 +34,6 @@ class WriteServiceStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.WriteData = channel.unary_unary(
-                '/WriteService/WriteData',
-                request_serializer=write__service__pb2.WriteRequest.SerializeToString,
-                response_deserializer=write__service__pb2.WriteResponse.FromString,
-                _registered_method=True)
         self.CreateEvent = channel.unary_unary(
                 '/WriteService/CreateEvent',
                 request_serializer=write__service__pb2.CreateEventRequest.SerializeToString,
@@ -59,16 +54,15 @@ class WriteServiceStub(object):
                 request_serializer=write__service__pb2.CreateVenueRequest.SerializeToString,
                 response_deserializer=write__service__pb2.CreateEntityResponse.FromString,
                 _registered_method=True)
+        self.CreateOrganizer = channel.unary_unary(
+                '/WriteService/CreateOrganizer',
+                request_serializer=write__service__pb2.CreateOrganizerRequest.SerializeToString,
+                response_deserializer=write__service__pb2.CreateEntityResponse.FromString,
+                _registered_method=True)
 
 
 class WriteServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
-
-    def WriteData(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
 
     def CreateEvent(self, request, context):
         """Missing associated documentation comment in .proto file."""
@@ -94,14 +88,15 @@ class WriteServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def CreateOrganizer(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_WriteServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'WriteData': grpc.unary_unary_rpc_method_handler(
-                    servicer.WriteData,
-                    request_deserializer=write__service__pb2.WriteRequest.FromString,
-                    response_serializer=write__service__pb2.WriteResponse.SerializeToString,
-            ),
             'CreateEvent': grpc.unary_unary_rpc_method_handler(
                     servicer.CreateEvent,
                     request_deserializer=write__service__pb2.CreateEventRequest.FromString,
@@ -122,6 +117,11 @@ def add_WriteServiceServicer_to_server(servicer, server):
                     request_deserializer=write__service__pb2.CreateVenueRequest.FromString,
                     response_serializer=write__service__pb2.CreateEntityResponse.SerializeToString,
             ),
+            'CreateOrganizer': grpc.unary_unary_rpc_method_handler(
+                    servicer.CreateOrganizer,
+                    request_deserializer=write__service__pb2.CreateOrganizerRequest.FromString,
+                    response_serializer=write__service__pb2.CreateEntityResponse.SerializeToString,
+            ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
             'WriteService', rpc_method_handlers)
@@ -132,33 +132,6 @@ def add_WriteServiceServicer_to_server(servicer, server):
  # This class is part of an EXPERIMENTAL API.
 class WriteService(object):
     """Missing associated documentation comment in .proto file."""
-
-    @staticmethod
-    def WriteData(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/WriteService/WriteData',
-            write__service__pb2.WriteRequest.SerializeToString,
-            write__service__pb2.WriteResponse.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
 
     @staticmethod
     def CreateEvent(request,
@@ -257,6 +230,33 @@ class WriteService(object):
             target,
             '/WriteService/CreateVenue',
             write__service__pb2.CreateVenueRequest.SerializeToString,
+            write__service__pb2.CreateEntityResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def CreateOrganizer(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/WriteService/CreateOrganizer',
+            write__service__pb2.CreateOrganizerRequest.SerializeToString,
             write__service__pb2.CreateEntityResponse.FromString,
             options,
             channel_credentials,
