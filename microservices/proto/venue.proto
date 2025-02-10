@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package venue;
+
+message VenueData {
+  string venue_name = 1;
+  int64 venue_capacity = 2;
+  string venue_address = 3;
+  string venue_city = 4;
+  string venue_state = 5;
+  string venue_zip = 6;
+  string venue_country = 7;
+}
+
+message CreateVenueRequest {
+  VenueData data = 1;
+}

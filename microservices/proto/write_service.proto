@@ -1,4 +1,5 @@
 syntax = "proto3";
+import "google/protobuf/timestamp.proto";
 
 message WriteRequest {
   string data = 1;
@@ -8,16 +9,6 @@ message WriteResponse {
   string status = 1;
 }
 
-service WriteService {
-  rpc WriteData (WriteRequest) returns (WriteResponse) {};
-  rpc CreateEvent(CreateEventRequest) returns (CreateEventResponse);
-
-}
-
-
-package event;
-
-import "google/protobuf/timestamp.proto";
 
 message EventData {
   int32 org_id = 1;
@@ -35,7 +26,92 @@ message CreateEventRequest {
   EventData data = 1;
 }
 
-message CreateEventResponse {
+
+enum Gender {
+    Male = 0;
+    Female = 1;
+    Other = 2;
+}
+
+enum SpendClass {
+    A = 0;
+    B = 1;
+    C = 2;
+    D = 3;
+    E = 4;
+}
+
+message UserData {
+  string username = 1;
+  string first_name = 2;
+  string last_name = 3;
+  string email = 4;
+  string location = 5;
+  string language = 6;
+  Gender gender = 7;
+  int32 age = 8;
+  optional SpendClass spend_class = 9;
+  bool music_service = 10;
+  string pw = 11;
+}
+
+message CreateUserRequest {
+  UserData data = 1;
+}
+
+
+message Socials {
+    optional string website = 1;
+    optional string soundcloud = 2;
+    optional string spotify = 3;
+    optional string facebook = 4;
+    optional string instagram = 5;
+    optional string snapchat = 6;
+    optional string x = 7;
+}
+
+message DJData {
+
+  string dj_name = 1;
+  string first_name = 2;
+  string last_name = 3;
+  string bio = 4;
+  string location = 5;
+
+  optional Socials social_data = 8;
+  string email = 20;
+  string phone = 21;
+
+}
+
+message CreateDJRequest {
+  DJData data = 1;
+}
+
+
+message VenueData {
+  string venue_name = 1;
+  int64 venue_capacity = 2;
+  string venue_address = 3;
+  string venue_city = 4;
+  string venue_state = 5;
+  string venue_zip = 6;
+  string venue_country = 7;
+}
+
+message CreateVenueRequest {
+  VenueData data = 1;
+}
+
+service WriteService {
+  rpc WriteData (WriteRequest) returns (WriteResponse) {};
+  rpc CreateEvent(CreateEventRequest) returns (CreateEntityResponse);
+  rpc CreateUser(CreateUserRequest) returns (CreateEntityResponse);
+  rpc CreateDj(CreateDJRequest) returns (CreateEntityResponse);
+  rpc CreateVenue(CreateVenueRequest) returns (CreateEntityResponse);
+}
+
+message CreateEntityResponse {
   bool success = 1;
   string message = 2;
 }

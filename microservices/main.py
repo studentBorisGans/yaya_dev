@@ -52,18 +52,30 @@ def handle_event(data):
 def handle_venue(data):
     request = write_service_pb2.WriteRequest(data=data)
     response = grpc_stub.WriteData(request)
-    return {"status": response.status}
+    return {"Success": response.success, "Message": response.message}
+
 
 def handle_user(data):
-    request = write_service_pb2.WriteRequest(data=data)
-    response = grpc_stub.WriteData(request)
-    return {"status": response.status}
+    print(f"Sync data: {data}")
+
+    request = write_service_pb2.CreateUserRequest(data=data)
+    response = grpc_stub.CreateUser(request)
+    return {"Success": response.success, "Message": response.message}
+
+def handle_dj(data):
+    print(f"Sync data: {data}")
+
+    request = write_service_pb2.CreateDJRequest(data=data)
+    response = grpc_stub.CreateDj(request)
+    return {"Success": response.success, "Message": response.message}
+
 
 # Dictionary for O(1) lookup
 type_handlers = {
     "event": handle_event,
     "venue": handle_venue,
     "user": handle_user,
+    "dj": handle_dj
 }
 
 
@@ -209,7 +221,7 @@ async def essential_write(data: dict):
     """
     Calls the gRPC service for essential database writes.
     """
-    print(f"Sync data: {data}")
+    # print(f"Sync data: {data}")
     
     obj_type = data.get("type")
     obj_data = data.get("data")

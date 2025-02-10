@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package dj;
+
+message Socials {
+    optional string website = 1;
+    optional string soundcloud = 2;
+    optional string spotify = 3;
+    optional string facebook = 4;
+    optional string instagram = 5;
+    optional string snapchat = 6;
+    optional string x = 7;
+}
+
+message DJData {
+  string dj_name = 1;
+  string first_name = 2;
+  string last_name = 3;
+  string bio = 4;
+  string location = 5;
+  optional bool socials = 6;
+  optional Socials social_data = 7;
+}
+
+message CreateDJRequest {
+  DJData data = 1;
+}

@@ -1,0 +1,36 @@
+syntax = "proto3";
+import "google/protobuf/timestamp.proto";
+
+package user;
+
+enum Gender {
+    Male = 0;
+    Female = 1;
+    Other = 2;
+}
+
+enum SpendClass {
+    A = 0;
+    B = 1;
+    C = 2;
+    D = 3;
+    E = 4;
+}
+
+message UserData {
+  string username = 1;
+  string first_name = 2;
+  string last_name = 3;
+  string email = 4;
+  string location = 5;
+  string language = 6;
+  Gender gender = 7;
+  int32 age = 8;
+  optional SpendClass spend_class = 9;
+  bool music_service = 10;
+  string pw = 11;
+}
+
+message CreateUserRequest {
+  UserData data = 1;
+}

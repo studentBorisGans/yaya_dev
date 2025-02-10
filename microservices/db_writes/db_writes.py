@@ -10,7 +10,13 @@ import write_service_pb2_grpc
 from grpc_reflection.v1alpha import reflection
 from google.protobuf.timestamp_pb2 import Timestamp
 
+GENDER_MAP = {0: "Male", 1: "Female", 2: "Other"}
+SPEND_CLASS_MAP = {0: "A", 1: "B", 2: "C", 3: "D", 4: "E"}
+
 def write_to_db(query: str, *values):
+    print("HereweeeS")
+    connection = None
+    cursor = None
     try:
         connection = mysql.connector.connect(
             user="root",
@@ -19,20 +25,29 @@ def write_to_db(query: str, *values):
             database="yaya_dev"
         )
         cursor = connection.cursor()
+
+        # return None
+
         cursor.execute(query, values)
         connection.commit()
         print("Data inserted successfully.")
 
+        # if cursor.with_rows:
+        #     cursor.fetchall()
         # Return the last inserted row ID
         return cursor.lastrowid
+    
 
     except mysql.connector.Error as e:
         print(f"Error: {e}")
+        # return write_service_pb2.CreateEntityResponse(success=False, message=f"DB Error: {e}")
         return None
 
     finally:
-        cursor.close()
-        connection.close()
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
         print("\nConnection closed")
 
 class WriteService(write_service_pb2_grpc.WriteServiceServicer):
@@ -64,13 +79,125 @@ class WriteService(write_service_pb2_grpc.WriteServiceServicer):
                 request.data.pre_bio
             )
             if write_to_db(query, *values) is None:
-                return write_service_pb2.CreateEventResponse(success=False, message="DB Error")
+                return write_service_pb2.CreateEntityResponse(success=False, message="DB Error")
 
             # write_to_database(request.data)
-            return write_service_pb2.CreateEventResponse(success=True, message="djdjdj")
+            return write_service_pb2.CreateEntityResponse(success=True, message="djdjdj")
         except Exception as e:
             print(f"Error writing to DB: {e}")
-            return write_service_pb2.CreateEventResponse(success=False, message=e)
+            return write_service_pb2.CreateEntityResponse(success=False, message=e)
+    
+    def CreateUser(self, request, context):
+        print(f"Received data: {request.data}")
+        try:
+            query = """
+            INSERT INTO user_data (
+                username, first_name, last_name, email, location, language, gender, age, spend_class, music_service, pw
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+            """
+
+            values = (
+                request.data.username,
+                request.data.first_name,
+                request.data.last_name,
+                request.data.email,
+                request.data.location,
+                request.data.language,
+                GENDER_MAP[request.data.gender],  # Should be stored as an integer
+                request.data.age,
+                SPEND_CLASS_MAP.get(request.data.spend_class, None),
+                int(request.data.music_service),  # Convert bool to int (1 or 0)
+                request.data.pw,
+            )
+            if write_to_db(query, *values) is None:
+                return write_service_pb2.CreateEntityResponse(success=False, message="DB Error")
+
+            # write_to_database(request.data)
+            return write_service_pb2.CreateEntityResponse(success=True, message="user created")
+        except Exception as e:
+            print(f"Error writing to DB: {e}")
+            return write_service_pb2.CreateEntityResponse(success=False, message=e)
+        
+    def CreateDj(self, request, context):
+        print(f"Received data: {request.data}")
+        try:
+            query = """
+            INSERT INTO dj (
+                dj_name, first_name, last_name, bio, location, email, phone
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s);"
+            """
+            # query = """
+            # INSERT INTO dj (
+            #     dj_name, first_name, last_name, bio, location
+            # ) VALUES (%s, %s, %s, %s, %s);"
+            # """
+            values = (
+                request.data.dj_name,
+                request.data.first_name,
+                request.data.last_name,
+                request.data.bio,
+                request.data.location,
+                request.data.email,
+                request.data.phone                
+            )
+            dj_id = write_to_db(query, *values)
+            if dj_id is None:
+                return write_service_pb2.CreateEntityResponse(success=False, message="DB Error")
+            
+            # if request.data.HasField("social_data"):
+            #     print("Processing social data...")
+            #     social = request.data.social_data
+
+            #     connection = mysql.connector.connect(
+            #         user="root",
+            #         password="Root1234",
+            #         host="localhost",
+            #         database="yaya_dev"
+            #     )
+            #     cursor = connection.cursor()
+            #     cursor.execute(
+            #         """
+            #         INSERT INTO dj_socials (dj_id, website, soundcloud, spotify, facebook, instagram, snapchat, x) 
+            #         VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
+            #         """,
+            #         (dj_id,
+            #         social.website or None,
+            #         social.soundcloud or None,
+            #         social.spotify or None,
+            #         social.facebook or None,
+            #         social.instagram or None,
+            #         social.snapchat or None,
+            #         social.x or None)
+            #     )
+            #     cursor.close()
+            #     connection.close()
+
+                # query2 = """
+                # INSERT INTO dj_socials (dj_id, website, soundcloud, spotify, facebook, instagram, snapchat, x) 
+                # VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
+                # """
+                # values2 = (
+                #     dj_id,
+                #     social.website or None,
+                #     social.soundcloud or None,
+                #     social.spotify or None,
+                #     social.facebook or None,
+                #     social.instagram or None,
+                #     social.snapchat or None,
+                #     social.x or None
+                # )
+                # social_insert = write_to_db(query2, *values2)
+                # if social_insert is None:
+                #     return write_service_pb2.CreateEntityResponse(success=False, message="DB Error with social data")
+
+            return write_service_pb2.CreateEntityResponse(success=True, message="dj created")
+        except mysql.connector.Error as err:
+            print(f"Error: {err}")
+            return write_service_pb2.CreateEntityResponse(success=False, message=err)
+
+        except Exception as e:
+            print(f"Error writing to DB: {e}")
+            return write_service_pb2.CreateEntityResponse(success=False, message=e)
 
 
 def write_to_database(data):

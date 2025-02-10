@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package event;
+
+import "google/protobuf/timestamp.proto";
+
+message EventData {
+  int32 org_id = 1;
+  int32 venue_id = 2;
+  bool published = 3;
+  bool tagged_bool = 4;
+  string name = 5;
+  google.protobuf.Timestamp date = 6;
+  float budget = 7;
+  optional string pre_event_poster = 8;
+  optional string pre_bio = 9;
+}
+
+message CreateEventRequest {
+  EventData data = 1;
+}
