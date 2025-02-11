@@ -10,6 +10,8 @@ import os
 import asyncio
 import aiomysql
 import requests
+import base64
+import json
 # switch to pyodbc or asyncodbc for azure SQL
 
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key")
@@ -78,8 +80,6 @@ def handle_org(data):
     response = grpc_stub.CreateOrganizer(request)
     return {"Success": response.success, "Message": response.message}
 
-
-# Dictionary for O(1) lookup
 type_handlers = {
     "event": handle_event,
     "venue": handle_venue,
@@ -96,13 +96,22 @@ def rotate_keys():
     print(f"New secret key: {SECRET_KEYS['current']}")
 
 def create_jwt(data: dict, expires_delta: Optional[timedelta] = None):
-    to_encode = data.copy()
+    to_encode = {}
+    to_encode['user_id'] = data['user_id']
+    bytes = base64.b64encode(json.dumps(data).encode('utf-8')).decode('utf-8')
+    # encoded_str = bytes.decode('utf-8')
+
+    # notifications, music servce, established, username, email, location, language
 
     if expires_delta:
         to_encode["exp"] = int((datetime.now(timezone.utc) + expires_delta).timestamp())
     else:
         to_encode["exp"] = int((datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)).timestamp())
-    print(f"Data: {to_encode}")
+    print(f"Creating jwt with: {to_encode}")
+    print(f"Encoding: {bytes}")
+
+    to_encode['data'] = bytes
+
     return jwt.encode(to_encode, SECRET_KEYS["current"], algorithm=ALGORITHM)
 
 def create_refresh_token(data: dict):
@@ -118,14 +127,20 @@ def decode_jwt(token: str) -> Dict:
         print(f"Time to expiration: {exp - current_time}")
         if current_time > exp:
             raise HTTPException(status_code=401, detail="Token has expired")
+
+        decoded = json.loads(base64.b64decode(payload["data"]).decode("utf-8"))
         print(f"Payload at decoding: {payload}")
+        print(f"Base64 data: {decoded}")
         return payload
     except ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token has expired")
     except JWTError:
         try:
             payload = jwt.decode(token, SECRET_KEYS["previous"], algorithms=[ALGORITHM])
+            decoded = json.loads(base64.b64decode(payload["data"]).decode("utf-8"))
+
             print(f"Payload at decoding: {payload}")
+            print(f"Base64 data: {decoded}")
             return payload
         except:
             raise HTTPException(status_code=401, detail="Invalid token")
@@ -174,7 +189,7 @@ async def get_current_user(username: str, pw: str):
     try:
         async with pool.acquire() as conn:
             async with conn.cursor() as cursor:
-                await cursor.execute("SELECT user_id, username, first_name, last_name, email, location, language, gender, age, spend_class, notifications, music_service, established FROM user_data WHERE username = %s AND pw = %s;", (username, pw))
+                await cursor.execute("SELECT user_id, username, first_name, last_name, email, location, language, notifications, music_service, established FROM user_data WHERE username = %s AND pw = %s;", (username, pw))
                 response_data = await cursor.fetchone()
                 if not response_data:
                     raise HTTPException(status_code=401, detail="User not found")
@@ -220,6 +235,7 @@ def refresh_access_token(body: dict=Body(...)):
 @app.get("/protected")
 def protected(token: str):
     user = decode_jwt(token)
+    print(f"\nProtected data: {user}")
     return {"message": f"Hello, User {user['user_id']}!", "other_data": user}
 
 @app.get("/new_key")
@@ -231,7 +247,8 @@ async def essential_write(data: dict):
     """
     Calls the gRPC service for essential database writes.
     """
-    # print(f"Sync data: {data}")
+    user = decode_jwt(data.get("token"))
+    print(f"\nUser {user['user_id']} writing to DB")
     
     obj_type = data.get("type")
     obj_data = data.get("data")

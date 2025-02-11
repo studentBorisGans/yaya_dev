@@ -111,7 +111,8 @@ class WriteService(write_service_pb2_grpc.WriteServiceServicer):
         except Exception as e:
             print(f"Exception during writing: {e}")
             return write_service_pb2.CreateEntityResponse(success=False, message=f"Exception during writing: {e}")
-        
+    # string email = 100;
+#   string phone = 101;
     def CreateDj(self, request, context):
         print(f"Received data: {request.data}")
         try:
@@ -134,6 +135,7 @@ class WriteService(write_service_pb2_grpc.WriteServiceServicer):
                 request.data.email,
                 request.data.phone                
             )
+
             dj_id = write_to_db(query, *values)
             if dj_id is None:
                 return write_service_pb2.CreateEntityResponse(success=False, message=f"DB Error: {err_msg}")

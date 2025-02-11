@@ -67,15 +67,21 @@ message DJData {
   string last_name = 3;
   string bio = 4;
   string location = 5;
+}
 
-  optional Socials social_data = 8;
-  string email = 20;
-  string phone = 21;
-
+message newDJData {
+  string dj_name = 1;
+  string first_name = 2;
+  string last_name = 3;
+  string bio = 4;
+  string location = 5;
+  string email = 6;
+  string phone = 7;
 }
 
 message CreateDJRequest {
-  DJData data = 1;
+  newDJData data = 1;
+  optional Socials social_data = 2;
 }
 
 
