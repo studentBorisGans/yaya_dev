@@ -126,14 +126,17 @@ def decode_jwt(token: str) -> Dict:
         current_time = int(datetime.now(timezone.utc).timestamp())
         print(f"Time to expiration: {exp - current_time}")
         if current_time > exp:
-            raise HTTPException(status_code=401, detail="Token has expired")
+            return(False, "Token has expired")
+            # raise HTTPException(status_code=401, detail="Token has expired")
 
         decoded = json.loads(base64.b64decode(payload["data"]).decode("utf-8"))
         print(f"Payload at decoding: {payload}")
         print(f"Base64 data: {decoded}")
-        return payload
+        return (True, payload)
+        # return payload
     except ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token has expired")
+        return (False, "Token has expired")
+        # raise HTTPException(status_code=401, detail="Token has expired")
     except JWTError:
         try:
             payload = jwt.decode(token, SECRET_KEYS["previous"], algorithms=[ALGORITHM])
@@ -141,22 +144,25 @@ def decode_jwt(token: str) -> Dict:
 
             print(f"Payload at decoding: {payload}")
             print(f"Base64 data: {decoded}")
-            return payload
+            return (True, payload)
+            # return payload
         except:
-            raise HTTPException(status_code=401, detail="Invalid token")
+            return (False, "Invalid token")
+            # raise HTTPException(status_code=401, detail="Invalid token")
     
 def verify_refresh_token(refresh_token: str):
     try:
         payload = jwt.decode(refresh_token, SECRET_KEYS["current"], algorithms=[ALGORITHM])
         print(f"\nPayload: {payload}")
-        return payload
+        return (True, payload)
     except JWTError as err:
         print(f"\nError: {err}")
         try:
             payload = jwt.decode(refresh_token, SECRET_KEYS["previous"], algorithms=[ALGORITHM])
-            return payload
+            return (True, payload)
         except:
-            raise HTTPException(status_code=401, detail="Invalid token")
+            return (False, "Invalid token")
+            # raise HTTPException(status_code=401, detail="Invalid token")
         # Do I need to check the previous key for refresh tokens?? 
 
 # def encode_jwt(data: Dict) -> str:
@@ -228,6 +234,10 @@ def refresh_access_token(body: dict=Body(...)):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     payload = verify_refresh_token(refresh_token)
+    if not payload[0]:
+        print(f"Error with verifying refresh token")
+        raise HTTPException(status_code=401, detail=payload[1])
+
     new_access_token = create_jwt(payload)
     return {"access_token": new_access_token}
 
@@ -235,8 +245,11 @@ def refresh_access_token(body: dict=Body(...)):
 @app.get("/protected")
 def protected(token: str):
     user = decode_jwt(token)
-    print(f"\nProtected data: {user}")
-    return {"message": f"Hello, User {user['user_id']}!", "other_data": user}
+    if not user[0]:
+        raise HTTPException(status_code=401, detail=user[1])
+
+    print(f"\nProtected data: {user[1]}")
+    return {"message": f"Hello, User {user[1]['user_id']}!", "other_data": user[1]}
 
 @app.get("/new_key")
 def refresh_key_manual():
@@ -248,7 +261,10 @@ async def essential_write(data: dict):
     Calls the gRPC service for essential database writes.
     """
     user = decode_jwt(data.get("token"))
-    print(f"\nUser {user['user_id']} writing to DB")
+    if not user[0]:
+        raise HTTPException(status_code=401, detail=user[1])
+
+    print(f"\nUser {user[1]['user_id']} writing to DB")
     
     obj_type = data.get("type")
     obj_data = data.get("data")
