@@ -33,7 +33,7 @@ CREATE TABLE user_data (
 );
 """
 
-tables['venue'] = """
+tables['venues'] = """
 CREATE TABLE IF NOT EXISTS venues (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255),
@@ -78,7 +78,6 @@ CREATE TABLE IF NOT EXISTS dj (
 
 """
 
-# HERE
 
 tables['event_data'] = """
 CREATE TABLE IF NOT EXISTS event_data (
@@ -92,12 +91,12 @@ CREATE TABLE IF NOT EXISTS event_data (
     pre_bio TEXT NULL,
     features JSONB,
     FOREIGN KEY (organizer_id) REFERENCES organizer(id) ON DELETE RESTRICT,
-    FOREIGN KEY (venue_id) REFERENCES venue(id) ON DELETE RESTRICT
+    FOREIGN KEY (venue_id) REFERENCES venues(id) ON DELETE RESTRICT
 );
 ALTER TABLE organizer ADD COLUMN deleted BOOLEAN DEFAULT FALSE;
 ALTER TABLE dj ADD COLUMN deleted BOOLEAN DEFAULT FALSE;
 ALTER TABLE user_data ADD COLUMN deleted BOOLEAN DEFAULT FALSE;
-ALTER TABLE venue ADD COLUMN deleted BOOLEAN DEFAULT FALSE;
+ALTER TABLE venues ADD COLUMN deleted BOOLEAN DEFAULT FALSE;
 """
 
 
@@ -133,7 +132,7 @@ CREATE TABLE IF NOT EXISTS published_events (
 );
 ALTER TABLE user_data RENAME COLUMN timestamp TO registered_at;
 ALTER TABLE event_data ADD COLUMN created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
-ALTER TABLE venue ADD COLUMN created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE venues ADD COLUMN created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
 ALTER TABLE organizer ADD COLUMN created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
 ALTER TABLE dj ADD COLUMN created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
 """
@@ -201,16 +200,12 @@ CREATE TABLE IF NOT EXISTS shared_ticket_details (
 );
 """
 
+# MISSING MESSAGES AND PURCHASE DETAILS
 
 
-# tables['dj_socials'] = """"""
-
-
-
-cursor.execute(tables['dj_socials'])
-cursor.execute(tables['published_events'])
-
-# cursor.execute(tables['dj'])
+for table_name, table_sql in tables.items():
+        cursor.execute(table_sql)
+        print(f"Created table: {table_name}")
 
 
 conn.commit()
