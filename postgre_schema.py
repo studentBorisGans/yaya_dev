@@ -15,7 +15,7 @@ tables = {}
 
 tables['user_data'] = """
 CREATE TYPE gender_enum AS ENUM ('Male', 'Female', 'Other');
-CREATE TYPE spend_class_enum AS ENUM ('A', 'B', 'C', 'D', 'E');
+CREATE TYPE spend_class_enum AS ENUM ('A', 'B', 'C', 'D', 'E', 'NA');
 
 CREATE TABLE user_data (
     user_id SERIAL PRIMARY KEY,
@@ -75,7 +75,6 @@ CREATE TABLE IF NOT EXISTS dj (
     notifications BOOLEAN DEFAULT FALSE,
     features JSONB
 );
-
 """
 
 
@@ -203,9 +202,17 @@ CREATE TABLE IF NOT EXISTS shared_ticket_details (
 # MISSING MESSAGES AND PURCHASE DETAILS
 
 
-for table_name, table_sql in tables.items():
-        cursor.execute(table_sql)
-        print(f"Created table: {table_name}")
+# for table_name, table_sql in tables.items():
+#         cursor.execute(table_sql)
+#         print(f"Created table: {table_name}")
+
+# cursor.execute("ALTER TABLE shared_ticket_details RENAME TO shared_tickets")
+# cursor.execute("ALTER TABLE shared_ticket RENAME TO shared_ticket_details")
+# cursor.execute("ALTER TABLE shared_tickets RENAME TO shared_ticket")
+
+
+# cursor.execute("ALTER TABLE dj ADD COLUMN phone VARCHAR(20)")
+
 
 
 conn.commit()
