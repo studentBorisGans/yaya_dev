@@ -260,11 +260,11 @@ async def essential_write(data: dict):
     """
     Calls the gRPC service for essential database writes.
     """
-    user = decode_jwt(data.get("token"))
-    if not user[0]:
-        raise HTTPException(status_code=401, detail=user[1])
+    # user = decode_jwt(data.get("token"))
+    # if not user[0]:
+    #     raise HTTPException(status_code=401, detail=user[1])
 
-    print(f"\nUser {user[1]['user_id']} writing to DB")
+    # print(f"\nUser {user[1]['user_id']} writing to DB")
     
     obj_type = data.get("type")
     obj_data = data.get("data")

@@ -1,5 +1,7 @@
-# import asyncio
+import asyncio
+import asyncpg
 import psycopg2
+from psycopg2.pool import SimpleConnectionPool
 
 import grpc
 import time #faking DB write
@@ -9,10 +11,58 @@ import write_service_pb2_grpc
 from grpc_reflection.v1alpha import reflection
 from google.protobuf.timestamp_pb2 import Timestamp
 
+
+pool = SimpleConnectionPool(1, 10, 
+    database="postgres",
+    user="user",
+    password="password",
+    host="localhost",  # Since you're tunneling
+    port=5432
+)
+err_msg = ""
+
+
+def db_query(self, query, *params):
+    conn = pool.getconn()
+    global err_msg
+    err_msg = ""
+    print("HereweeeS")
+
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(query, params)
+            conn.commit()
+            # connection.commit()
+            result = cursor.lastrowid
+            print("Data inserted successfully.")
+    
+    except psycopg2.errors.DatabaseError as dbError:
+        print(f"Database Error: \n{dbError}")
+        err_msg = dbError
+        conn.rollback()
+        return None
+    except psycopg2.errors.OperationalError as opError:
+        print(f"Operational Error: \n{opError}")
+        err_msg = opError
+        conn.rollback()
+        return None
+    except Exception as genError:
+        print(f"Unexpected Exception: \n{genError}")
+        err_msg = genError
+        conn.rollback()
+        return None
+    finally:
+        pool.putconn(conn)
+        print("\nConnection returned to pool")
+    return result
+
+# async def init_db_pool():
+#     global pool
+#     pool = await asyncpg.create_pool(dsn="postgres://user:password@postgres_primary:5432/postgres")
+
 GENDER_MAP = {0: "Male", 1: "Female", 2: "Other"}
 SPEND_CLASS_MAP = {0: "A", 1: "B", 2: "C", 3: "D", 4: "E"}
 
-err_msg = ""
 
 def write_to_db(query: str, *values):
     global err_msg
@@ -29,7 +79,7 @@ def write_to_db(query: str, *values):
 
         cursor = connection.cursor()
 
-        return None
+        # return None
 
         cursor.execute(query, values)
         connection.commit()
@@ -111,7 +161,8 @@ class WriteService(write_service_pb2_grpc.WriteServiceServicer):
                 # int(request.data.music_service),
                 request.data.pw,
             )
-            if write_to_db(query, *values) is None:
+            # if write_to_db(query, *values) is None:
+            if db_query(query, *values) is None:
                 return write_service_pb2.CreateEntityResponse(success=False, message=f"DB Error: {err_msg}")
 
             return write_service_pb2.CreateEntityResponse(success=True, message="User created!")
@@ -268,14 +319,15 @@ def serve():
     server.add_insecure_port("[::]:50051")
     server.start()
     print("gRPC server started on port 50051")
+    server.wait_for_termination()
 
 
     # Run the server indefinitely
-    try:
-        while True:
-            time.sleep(86400)
-    except KeyboardInterrupt:
-        server.stop(0)
+    # try:
+    #     while True:
+    #         time.sleep(86400)
+    # except KeyboardInterrupt:
+    #     server.stop(0)
 
 if __name__ == "__main__":
     serve()
