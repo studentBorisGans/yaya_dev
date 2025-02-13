@@ -10,8 +10,6 @@ cursor = conn.cursor()
 cursor.execute("CREATE DATABASE IF NOT EXISTS yaya_dev;")
 cursor.execute("USE yaya_dev;")
 
-# CHATGBT
-
 
 # Create tables
 tables = {}
@@ -326,7 +324,7 @@ CREATE TABLE purchased_tickets (
 #     cursor.execute(table_sql)
 #     print(f"Created table: {table_name}")
 
-cursor.execute(tables['purchased_tickets'])
+# cursor.execute(tables['purchased_tickets'])
 # Close connection
 cursor.close()
 conn.close()
