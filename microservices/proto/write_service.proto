@@ -94,6 +94,7 @@ message VenueData {
   string venue_state = 5;
   string venue_zip = 6;
   string venue_country = 7;
+  int32 table_count = 8;
 }
 
 message CreateVenueRequest {

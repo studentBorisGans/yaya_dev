@@ -1,80 +1,86 @@
-import asyncio
-import mysql.connector
+import psycopg2
+from psycopg2.pool import SimpleConnectionPool
 
 import grpc
-import time #faking DB write
+import time
 from concurrent import futures
 import write_service_pb2
 import write_service_pb2_grpc
 from grpc_reflection.v1alpha import reflection
 from google.protobuf.timestamp_pb2 import Timestamp
+from datetime import datetime, timezone
 
 GENDER_MAP = {0: "Male", 1: "Female", 2: "Other"}
 SPEND_CLASS_MAP = {0: "A", 1: "B", 2: "C", 3: "D", 4: "E"}
 
+pool = SimpleConnectionPool(1, 10, 
+    database="postgres",
+    user="user",
+    password="password",
+    host="localhost",
+    port=5432
+)
 err_msg = ""
 
-def write_to_db(query: str, *values):
+
+def db_query(query: str, *params):
+    conn = pool.getconn()
     global err_msg
     err_msg = ""
-    print("HereweeeS")
-    connection = None
-    cursor = None
+
     try:
-        connection = mysql.connector.connect(
-            user="root",
-            password="Root1234",
-            host="localhost",
-            database="yaya_dev"
-        )
-        cursor = connection.cursor()
+        with conn.cursor() as cursor:
+            print("Connection aqquired. Query to execute: \n")
+            print(cursor.mogrify(query, params).decode())
 
-        # return None
-
-        cursor.execute(query, values)
-        connection.commit()
-        print("Data inserted successfully.")
-
-        # if cursor.with_rows:
-        #     cursor.fetchall()
-        return cursor.lastrowid
+            cursor.execute(query, params)
+            conn.commit()
+            result = cursor.lastrowid
+            print("Data inserted successfully.")
     
-
-    except mysql.connector.Error as e:
-        print(f"Error: {e}")
-        err_msg = e
+    except psycopg2.errors.DatabaseError as dbError:
+        print(f"Database Error: \n{dbError}")
+        err_msg = dbError
+        conn.rollback()
         return None
-
+    except psycopg2.errors.OperationalError as opError:
+        print(f"Operational Error: \n{opError}")
+        err_msg = opError
+        conn.rollback()
+        return None
+    except Exception as genError:
+        print(f"Unexpected Exception: \n{genError}")
+        err_msg = genError
+        conn.rollback()
+        return None
     finally:
-        if cursor:
-            cursor.close()
-        if connection:
-            connection.close()
-        print("\nConnection closed")
+        pool.putconn(conn)
+        print("\nConnection returned to pool")
+    return result
+
 
 class WriteService(write_service_pb2_grpc.WriteServiceServicer):    
     def CreateEvent(self, request, context):
         print(f"Received data: {request.data}")
         try:
             datetime = request.data.date.ToDatetime()
-            iso = datetime.isoformat() + "Z"
-            mysql_datetime = datetime.fromisoformat(iso.replace('T', ' ').replace('Z', '')).strftime('%Y-%m-%d %H:%M:%S')
+            datetime = datetime.replace(tzinfo=timezone.utc)
+            postgre_datetime = datetime.isoformat()
+
             query = """
-                INSERT INTO event_data (organizer_id, venue_id, published, tagged, event_name, date, budget, pre_event_poster, pre_bio)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
+                INSERT INTO event_data (organizer_id, venue_id, event_name, date, budget, pre_event_poster, pre_bio)
+                VALUES (%s, %s, %s, %s, %s, %s, %s);
             """
             values = (
                 request.data.org_id,
                 request.data.venue_id,
-                request.data.published,
-                request.data.tagged_bool,
                 request.data.name,
-                mysql_datetime,
+                postgre_datetime,
                 request.data.budget,
                 request.data.pre_event_poster,
                 request.data.pre_bio
             )
-            if write_to_db(query, *values) is None:
+            if db_query(query, *values) is None:
                 return write_service_pb2.CreateEntityResponse(success=False, message=f"DB Error: {err_msg}")
 
             return write_service_pb2.CreateEntityResponse(success=True, message="Event created!")
@@ -83,12 +89,13 @@ class WriteService(write_service_pb2_grpc.WriteServiceServicer):
             return write_service_pb2.CreateEntityResponse(success=False, message=f"Exception during writing: {e}")
     
     def CreateUser(self, request, context):
-        print(f"Received data: {request.data}")
+        print(f"Received data: {request}")
+
         try:
             query = """
-            INSERT INTO user_data (
-                username, first_name, last_name, email, location, language, gender, age, spend_class, music_service, pw
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+            INSERT INTO user_data(
+                username, first_name, last_name, email, location, language, gender, age, spend_class, pw
+            ) VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
             """
 
             values = (
@@ -98,27 +105,26 @@ class WriteService(write_service_pb2_grpc.WriteServiceServicer):
                 request.data.email,
                 request.data.location,
                 request.data.language,
-                GENDER_MAP[request.data.gender],
+                GENDER_MAP.get(request.data.gender, 'Other'),
                 request.data.age,
-                SPEND_CLASS_MAP.get(request.data.spend_class, None),
-                int(request.data.music_service),
+                'NA', #when user registers spend class will never be known
                 request.data.pw,
             )
-            if write_to_db(query, *values) is None:
+
+            if db_query(query, *values) is None:
                 return write_service_pb2.CreateEntityResponse(success=False, message=f"DB Error: {err_msg}")
 
             return write_service_pb2.CreateEntityResponse(success=True, message="User created!")
         except Exception as e:
             print(f"Exception during writing: {e}")
-            return write_service_pb2.CreateEntityResponse(success=False, message=f"Exception during writing: {e}")
-    # string email = 100;
-#   string phone = 101;
+            return write_service_pb2.CreateEntityResponse(success=False, message=f"Unexpected Exception: {e}")
+
     def CreateDj(self, request, context):
         print(f"Received data: {request.data}")
         try:
             query = """
             INSERT INTO dj (
-                dj_name, first_name, last_name, bio, location, email, phone
+                alias, first_name, last_name, bio, location, email, phone
             ) VALUES (%s, %s, %s, %s, %s, %s, %s);"
             """
             # query = """
@@ -200,8 +206,8 @@ class WriteService(write_service_pb2_grpc.WriteServiceServicer):
         try:
             query = """
             INSERT INTO venues (
-                venue_name, venue_capacity, venue_address, venue_city, venue_state, venue_zip, venue_country
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s);
+                name, capacity, address, city, state, zip, country, table_count
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
             """
 
             values = (
@@ -211,9 +217,10 @@ class WriteService(write_service_pb2_grpc.WriteServiceServicer):
                 request.data.venue_city,
                 request.data.venue_state,
                 request.data.venue_zip,
-                request.data.venue_country
+                request.data.venue_country,
+                request.data.table_count
             )
-            if write_to_db(query, *values) is None:
+            if db_query(query, *values) is None:
                 return write_service_pb2.CreateEntityResponse(success=False, message=f"DB Error: {err_msg}")
 
             return write_service_pb2.CreateEntityResponse(success=True, message="Venue created!")
@@ -226,7 +233,7 @@ class WriteService(write_service_pb2_grpc.WriteServiceServicer):
         try:
             query = """
             INSERT INTO organizer (
-                org_name, first_name, last_name, email, phone, country, website
+                name, first_name, last_name, email, phone, country, website
             ) VALUES (%s, %s, %s, %s, %s, %s, %s);
             """
 
@@ -239,7 +246,7 @@ class WriteService(write_service_pb2_grpc.WriteServiceServicer):
                 request.data.country,
                 request.data.website
             )
-            if write_to_db(query, *values) is None:
+            if db_query(query, *values) is None:
                 return write_service_pb2.CreateEntityResponse(success=False, message=f"DB Error: {err_msg}")
 
             return write_service_pb2.CreateEntityResponse(success=True, message="Organizer created!")
@@ -261,16 +268,18 @@ def serve():
     server.start()
     print("gRPC server started on port 50051")
 
-
-    # Run the server indefinitely
     try:
         while True:
-            time.sleep(86400)
+            time.sleep(5)
+            # logic to check if database works?
     except KeyboardInterrupt:
+        print("Shutting down due to manual interruption")
+
+    finally:
+        print("Closing all DB connections...")
+        pool.closeall()
         server.stop(0)
+        print("Server stopped.")
 
 if __name__ == "__main__":
     serve()
-
-
-# Theres a conflict in my setup. In order for my grpc server to work, the code in the generated pb2_grpc.py python file (from proto) needs to import the other generated python file as such: import write_service_pb2 as write__service__pb2. However, my FastAPI endpoint needs to access these files as well to create the stub and channel, as well as accessing the functions.
