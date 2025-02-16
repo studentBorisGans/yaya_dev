@@ -8,6 +8,7 @@ from db_writes import write_service_pb2, write_service_pb2_grpc
 import grpc
 import os
 import asyncio
+import asyncpg
 import aiomysql
 import requests
 import base64
@@ -57,6 +58,7 @@ def handle_venue(data):
     request = write_service_pb2.CreateVenueRequest(data=data)
     response = grpc_stub.CreateVenue(request)
     return {"Success": response.success, "Message": response.message}
+
 
 
 def handle_user(data):
@@ -170,6 +172,28 @@ def verify_refresh_token(refresh_token: str):
 #     data["exp"] = expiry
 #     return jwt.encode(data, SECRET_KEYS, algorithm=ALGORITHM)
 # should have same expiry as user's token
+db_pool = None
+
+@app.on_event("startup")
+async def startup():
+    global db_pool
+    db_pool = await asyncpg.create_pool(
+        database="postgres",
+        user="user",
+        password="password",
+        host="localhost",
+        port=5432,
+        min_size=1,
+        max_size=5
+    )
+    print("✅ Database pool created")
+
+@app.on_event("shutdown")
+async def shutdown():
+    global db_pool
+    if db_pool:
+        await db_pool.close()
+        print("🛑 Database pool closed")
 
 async def create_pool():
     try:
@@ -186,6 +210,25 @@ async def create_pool():
     except aiomysql.Error as e:
         print(f"Database connection error: {e}")
         return None
+
+async def get_current_user_postgres(username: str, pw: str):
+    global db_pool
+    if not db_pool:
+        raise HTTPException(status_code=503, detail="Database connection failed")
+
+    try:
+        async with db_pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT user_id, username, first_name, last_name, email, location FROM user_data WHERE username = $1 AND pw = $2",
+                username, pw
+            )
+            if not row:
+                raise HTTPException(status_code=401, detail="User not found")
+            return dict(row)
+    except asyncpg.PostgresError as e:
+        raise HTTPException(status_code=500, detail=f"Database query error: {str(e)}")
+
+
 
 async def get_current_user(username: str, pw: str):
     pool = await create_pool()
@@ -216,7 +259,8 @@ async def login(creds: dict = Body(...)):
     if not username or not pw:
         raise HTTPException(status_code=401, detail="Missing credentials")
     
-    user_data = await get_current_user(username, pw)
+    # user_data = await get_current_user(username, pw)
+    user_data = await get_current_user_postgres(username, pw)
     sensitive_data['username'] = username
     sensitive_data['pw'] = pw
     print(f"\nUser data: {user_data}")

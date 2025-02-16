@@ -11,28 +11,31 @@ import write_service_pb2_grpc
 from grpc_reflection.v1alpha import reflection
 from google.protobuf.timestamp_pb2 import Timestamp
 
+GENDER_MAP = {0: "Male", 1: "Female", 2: "Other"}
+SPEND_CLASS_MAP = {0: "A", 1: "B", 2: "C", 3: "D", 4: "E"}
 
 pool = SimpleConnectionPool(1, 10, 
     database="postgres",
     user="user",
     password="password",
-    host="localhost",  # Since you're tunneling
+    host="localhost",
     port=5432
 )
 err_msg = ""
 
 
-def db_query(self, query, *params):
+def db_query(query: str, *params):
     conn = pool.getconn()
     global err_msg
     err_msg = ""
-    print("HereweeeS")
 
     try:
         with conn.cursor() as cursor:
+            print("Connection aqquired. Query to execute: \n")
+            print(cursor.mogrify(query, params).decode())
+
             cursor.execute(query, params)
             conn.commit()
-            # connection.commit()
             result = cursor.lastrowid
             print("Data inserted successfully.")
     
@@ -56,57 +59,6 @@ def db_query(self, query, *params):
         print("\nConnection returned to pool")
     return result
 
-# async def init_db_pool():
-#     global pool
-#     pool = await asyncpg.create_pool(dsn="postgres://user:password@postgres_primary:5432/postgres")
-
-GENDER_MAP = {0: "Male", 1: "Female", 2: "Other"}
-SPEND_CLASS_MAP = {0: "A", 1: "B", 2: "C", 3: "D", 4: "E"}
-
-
-def write_to_db(query: str, *values):
-    global err_msg
-    err_msg = ""
-    print("HereweeeS")
-    connection = None
-    cursor = None
-    try:
-        connection = psycopg2.connect(database = "postgres", 
-                                        user = "user", 
-                                        host= 'localhost',
-                                        password = "password",
-                                        port = 5432)
-
-        cursor = connection.cursor()
-
-        # return None
-
-        cursor.execute(query, values)
-        connection.commit()
-        print("Data inserted successfully.")
-
-        # if cursor.with_rows:
-        #     cursor.fetchall()
-        return cursor.lastrowid
-    
-    except psycopg2.errors.DatabaseError as dbError:
-        print(f"Database Error: \n{dbError}")
-        err_msg = dbError
-        return None
-    except psycopg2.errors.OperationalError as opError:
-        print(f"Operational Error: \n{opError}")
-        err_msg = opError
-        return None
-    except Exception as genError:
-        print(f"Unexpected Exception: \n{genError}")
-        err_msg = genError
-        return None
-    finally:
-        if cursor:
-            cursor.close()
-        if connection:
-            connection.close()
-        print("\nConnection closed")
 
 class WriteService(write_service_pb2_grpc.WriteServiceServicer):    
     def CreateEvent(self, request, context):
@@ -129,7 +81,7 @@ class WriteService(write_service_pb2_grpc.WriteServiceServicer):
                 request.data.pre_event_poster,
                 request.data.pre_bio
             )
-            if write_to_db(query, *values) is None:
+            if db_query(query, *values) is None:
                 return write_service_pb2.CreateEntityResponse(success=False, message=f"DB Error: {err_msg}")
 
             return write_service_pb2.CreateEntityResponse(success=True, message="Event created!")
@@ -138,12 +90,13 @@ class WriteService(write_service_pb2_grpc.WriteServiceServicer):
             return write_service_pb2.CreateEntityResponse(success=False, message=f"Exception during writing: {e}")
     
     def CreateUser(self, request, context):
-        print(f"Received data: {request.data}")
+        print(f"Received data: {request}")
+
         try:
             query = """
-            INSERT INTO user_data (
+            INSERT INTO user_data(
                 username, first_name, last_name, email, location, language, gender, age, spend_class, pw
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+            ) VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
             """
 
             values = (
@@ -153,24 +106,20 @@ class WriteService(write_service_pb2_grpc.WriteServiceServicer):
                 request.data.email,
                 request.data.location,
                 request.data.language,
-                # GENDER_MAP[request.data.gender],
-                request.data.gender,
+                GENDER_MAP.get(request.data.gender, 'Other'),
                 request.data.age,
-                # SPEND_CLASS_MAP.get(request.data.spend_class, None),
-                'NA',
-                # int(request.data.music_service),
+                'NA', #when user registers spend class will never be known
                 request.data.pw,
             )
-            # if write_to_db(query, *values) is None:
+
             if db_query(query, *values) is None:
                 return write_service_pb2.CreateEntityResponse(success=False, message=f"DB Error: {err_msg}")
 
             return write_service_pb2.CreateEntityResponse(success=True, message="User created!")
         except Exception as e:
             print(f"Exception during writing: {e}")
-            return write_service_pb2.CreateEntityResponse(success=False, message=f"Exception during writing: {e}")
-    # string email = 100;
-#   string phone = 101;
+            return write_service_pb2.CreateEntityResponse(success=False, message=f"Unexpected Exception: {e}")
+
     def CreateDj(self, request, context):
         print(f"Received data: {request.data}")
         try:
@@ -319,15 +268,16 @@ def serve():
     server.add_insecure_port("[::]:50051")
     server.start()
     print("gRPC server started on port 50051")
-    server.wait_for_termination()
+    # server.wait_for_termination()
 
 
     # Run the server indefinitely
-    # try:
-    #     while True:
-    #         time.sleep(86400)
-    # except KeyboardInterrupt:
-    #     server.stop(0)
+    try:
+        while True:
+            time.sleep(86400)
+    except KeyboardInterrupt:
+        pool.closeall()
+        server.stop(0)
 
 if __name__ == "__main__":
     serve()

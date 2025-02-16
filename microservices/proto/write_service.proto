@@ -30,6 +30,7 @@ enum SpendClass {
     C = 2;
     D = 3;
     E = 4;
+    NA = 5;
 }
 
 message UserData {
