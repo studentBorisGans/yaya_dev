@@ -1,9 +1,10 @@
 from fastapi import FastAPI, Request, HTTPException, Depends, Body
+from fastapi.responses import StreamingResponse, JSONResponse
 from jose import jwt, JWTError, ExpiredSignatureError
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
 from google.protobuf.timestamp_pb2 import Timestamp
-# from db_writes import write_service_pb2_grpc, write_service_pb2
+from contextlib import asynccontextmanager
 from db_writes import write_service_pb2, write_service_pb2_grpc
 import grpc
 import os
@@ -13,6 +14,7 @@ import aiomysql
 import requests
 import base64
 import json
+import httpx
 # switch to pyodbc or asyncodbc for azure SQL
 
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key")
@@ -26,19 +28,41 @@ REFRESH_TOKEN_EXPIRE_DAYS = 7
 user_data = {}
 sensitive_data = {}
 body_data = {}
-
-app = FastAPI()
-
+db_pool = None
 
 
 # gRPC Channel to the write microservice
 grpc_channel = grpc.insecure_channel("localhost:50051")
 grpc_stub = write_service_pb2_grpc.WriteServiceStub(grpc_channel)
 
-WRITE_SERVICE_REST_URL = "http://localhost:8001/write/"  # FastAPI REST endpoint
+# FastAPI REST endpoint
+WRITE_SERVICE_REST_URL = "http://localhost:8001/write/"  
+DB_READER_SERVICE_URL = "bs"
+
+# APP DEFINITION
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global db_pool
+    db_pool = await asyncpg.create_pool(
+        database="postgres",
+        user="user",
+        password="password",
+        host="localhost",
+        port=5433,
+        min_size=1,
+        max_size=3
+    )
+    print("✅ Database pool created")
+    
+    yield  # This is where the app runs
+
+    await db_pool.close()
+    print("🛑 Database pool closed")
+
+app = FastAPI(lifespan=lifespan)
 
 
-# WRITE DB OPERATIONS
+# --------------- Write DB Operations - GRPC channels ----------------
 def handle_event(data):
     date_str = data.get("date")
     date_obj = datetime.fromisoformat(date_str.replace("Z", "+00:00"))  # Handle UTC format
@@ -58,8 +82,6 @@ def handle_venue(data):
     request = write_service_pb2.CreateVenueRequest(data=data)
     response = grpc_stub.CreateVenue(request)
     return {"Success": response.success, "Message": response.message}
-
-
 
 def handle_user(data):
     print(f"Sync data: {data}")
@@ -91,7 +113,7 @@ type_handlers = {
 }
 
 
-
+# --------------- JWT Util Functions ----------------
 def rotate_keys():
     SECRET_KEYS["previous"] = SECRET_KEYS["current"]  # Move current to previous
     SECRET_KEYS["current"] = os.urandom(32).hex()  # Generate new key
@@ -99,7 +121,7 @@ def rotate_keys():
 
 def create_jwt(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = {}
-    to_encode['user_id'] = data['user_id']
+    to_encode['id'] = data['id']
     bytes = base64.b64encode(json.dumps(data).encode('utf-8')).decode('utf-8')
     # encoded_str = bytes.decode('utf-8')
 
@@ -172,44 +194,44 @@ def verify_refresh_token(refresh_token: str):
 #     data["exp"] = expiry
 #     return jwt.encode(data, SECRET_KEYS, algorithm=ALGORITHM)
 # should have same expiry as user's token
-db_pool = None
 
-@app.on_event("startup")
-async def startup():
-    global db_pool
-    db_pool = await asyncpg.create_pool(
-        database="postgres",
-        user="user",
-        password="password",
-        host="localhost",
-        port=5432,
-        min_size=1,
-        max_size=5
-    )
-    print("✅ Database pool created")
 
-@app.on_event("shutdown")
-async def shutdown():
-    global db_pool
-    if db_pool:
-        await db_pool.close()
-        print("🛑 Database pool closed")
+# @app.on_event("startup")
+# async def startup():
+#     global db_pool
+#     db_pool = await asyncpg.create_pool(
+#         database="postgres",
+#         user="user",
+#         password="password",
+#         host="localhost",
+#         port=5433,
+#         min_size=1,
+#         max_size=5
+#     )
+#     print("✅ Database pool created")
 
-async def create_pool():
-    try:
-        pool = await aiomysql.create_pool(
-            host="localhost",
-            user="root",
-            password="Root1234",
-            db="yaya_dev",
-            autocommit=True,
-            minsize=1,
-            maxsize=3
-        )
-        return pool
-    except aiomysql.Error as e:
-        print(f"Database connection error: {e}")
-        return None
+# @app.on_event("shutdown")
+# async def shutdown():
+#     global db_pool
+#     if db_pool:
+#         await db_pool.close()
+#         print("🛑 Database pool closed")
+
+# async def create_pool():
+#     try:
+#         pool = await aiomysql.create_pool(
+#             host="localhost",
+#             user="root",
+#             password="Root1234",
+#             db="yaya_dev",
+#             autocommit=True,
+#             minsize=1,
+#             maxsize=3
+#         )
+#         return pool
+#     except aiomysql.Error as e:
+#         print(f"Database connection error: {e}")
+#         return None
 
 async def get_current_user_postgres(username: str, pw: str):
     global db_pool
@@ -219,7 +241,7 @@ async def get_current_user_postgres(username: str, pw: str):
     try:
         async with db_pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT user_id, username, first_name, last_name, email, location FROM user_data WHERE username = $1 AND pw = $2",
+                "SELECT id, username, first_name, last_name, email, location FROM user_data WHERE username = $1 AND pw = $2",
                 username, pw
             )
             if not row:
@@ -229,29 +251,6 @@ async def get_current_user_postgres(username: str, pw: str):
         raise HTTPException(status_code=500, detail=f"Database query error: {str(e)}")
 
 
-
-async def get_current_user(username: str, pw: str):
-    pool = await create_pool()
-    if not pool:
-        raise HTTPException(status_code=503, detail="Database connection failed")
-
-    try:
-        async with pool.acquire() as conn:
-            async with conn.cursor() as cursor:
-                await cursor.execute("SELECT user_id, username, first_name, last_name, email, location, language, notifications, music_service, established FROM user_data WHERE username = %s AND pw = %s;", (username, pw))
-                response_data = await cursor.fetchone()
-                if not response_data:
-                    raise HTTPException(status_code=401, detail="User not found")
-                columns = [desc[0] for desc in cursor.description]
-                user_data = dict(zip(columns, response_data))
-                return user_data
-    except aiomysql.Error as e:
-        raise HTTPException(status_code=500, detail=f"Database query error: {str(e)}")
-    finally:
-        pool.close()
-        await pool.wait_closed()
-        print("\nPool closed")
-
 @app.post("/login")
 async def login(creds: dict = Body(...)):
     username = creds.get("username")
@@ -259,7 +258,6 @@ async def login(creds: dict = Body(...)):
     if not username or not pw:
         raise HTTPException(status_code=401, detail="Missing credentials")
     
-    # user_data = await get_current_user(username, pw)
     user_data = await get_current_user_postgres(username, pw)
     sensitive_data['username'] = username
     sensitive_data['pw'] = pw
@@ -286,42 +284,23 @@ def refresh_access_token(body: dict=Body(...)):
     return {"access_token": new_access_token}
 
 
-@app.get("/protected")
-def protected(token: str):
-    user = decode_jwt(token)
-    if not user[0]:
-        raise HTTPException(status_code=401, detail=user[1])
-
-    print(f"\nProtected data: {user[1]}")
-    return {"message": f"Hello, User {user[1]['user_id']}!", "other_data": user[1]}
-
-@app.get("/new_key")
-def refresh_key_manual():
-    rotate_keys()
-
+# --------------- Write Endpoints ----------------
 @app.post("/essential_write/")
 async def essential_write(data: dict):
     """
     Calls the gRPC service for essential database writes.
     """
-    # user = decode_jwt(data.get("token"))
-    # if not user[0]:
-    #     raise HTTPException(status_code=401, detail=user[1])
+    user = decode_jwt(data.get("token"))
+    if not user[0]:
+        raise HTTPException(status_code=401, detail=user[1])
 
-    # print(f"\nUser {user[1]['user_id']} writing to DB")
+    print(f"\nUser {user[1]['user_id']} writing to DB")
     
     obj_type = data.get("type")
     obj_data = data.get("data")
-    # timestamp = Timestamp()
-    # timestamp.GetCurrentTime()
-    # obj_data['date']
     
     handler = type_handlers.get(obj_type, lambda x: {"error": f"Unknown type: {obj_type}"})  
     return handler(obj_data)
-
-    # request = write_service_pb2.WriteRequest(data=data["data"])
-    # response = grpc_stub.WriteData(request)
-    # return {"status": response.status}
 
 @app.post("/background_write/")
 async def background_write(data: dict):
@@ -332,21 +311,53 @@ async def background_write(data: dict):
     response = requests.post(WRITE_SERVICE_REST_URL, json={"data": data["data"], "priority": False})
     return response.json()
 
-# @app.get("/")
-# async def route_to_service(user: Dict = Depends(get_current_user)):
-#     """
-#     Example route that authenticates user and forwards the request to another microservice via gRPC.
-#     """
-#     try:
-#         # Example of calling a gRPC service (pseudo-code, replace with actual gRPC client call)
-#         # async with grpc.aio.insecure_channel('localhost:50051') as channel:
-#         #     stub = SomeServiceStub(channel)
-#         #     response = await stub.SomeMethod(SomeRequest(user_id=user["id"]))
 
-#         response_data = {"message": "Data from gRPC service", "user": user}
-        
-#         # Encrypt response
-#         encrypted_response = encode_jwt(response_data)
-#         return {"data": encrypted_response}
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+# --------------- Streaming Read Endpoints ----------------
+@app.get("/events", response_class=StreamingResponse)
+async def proxy_get_events():
+    """Proxy request for streaming all events."""
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(f"{DB_READER_SERVICE_URL}/events", timeout=30.0)
+            return StreamingResponse(response.aiter_bytes(), media_type="application/json")
+        except httpx.HTTPError as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/djs", response_class=StreamingResponse)
+async def proxy_get_djs():
+    """Proxy request for streaming all DJs and their socials."""
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(f"{DB_READER_SERVICE_URL}/djs", timeout=30.0)
+            return StreamingResponse(response.aiter_bytes(), media_type="application/json")
+        except httpx.HTTPError as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+
+# ----------- Direct Proxy Read Endpoints ---------------
+@app.get("/event/{event_id}")
+async def proxy_get_event_details(event_id: int):
+    """Proxy request for getting detailed event info (venue & organizer)."""
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(f"{DB_READER_SERVICE_URL}/event/{event_id}", timeout=10.0)
+            return JSONResponse(content=response.json(), status_code=response.status_code)
+        except httpx.HTTPError as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+
+# --------------- B.S. Endpoints ----------------
+@app.get("/new_key")
+def refresh_key_manual():
+    """faking JWT key refresh; should be on timer"""
+    rotate_keys()
+
+@app.get("/protected")
+def protected(token: str):
+    """temporary endpoint to see whats in the JWT"""
+    user = decode_jwt(token)
+    if not user[0]:
+        raise HTTPException(status_code=401, detail=user[1])
+
+    print(f"Encoded data:\n {user}")
+    return {"message": f"Hello, User {user[1]['user_id']}!", "other_data": user[1]}
