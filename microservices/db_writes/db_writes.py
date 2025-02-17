@@ -35,7 +35,7 @@ def db_query(query: str, *params):
 
             cursor.execute(query, params)
             conn.commit()
-            result = cursor.lastrowid
+            result = cursor.fetchone()
             print("Data inserted successfully.")
     
     except psycopg2.errors.DatabaseError as dbError:
@@ -56,7 +56,7 @@ def db_query(query: str, *params):
     finally:
         pool.putconn(conn)
         print("\nConnection returned to pool")
-    return result
+    return result[0] or 1
 
 
 class WriteService(write_service_pb2_grpc.WriteServiceServicer):    
@@ -122,16 +122,12 @@ class WriteService(write_service_pb2_grpc.WriteServiceServicer):
     def CreateDj(self, request, context):
         print(f"Received data: {request.data}")
         try:
+
             query = """
             INSERT INTO dj (
                 alias, first_name, last_name, bio, location, email, phone
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s);"
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id;
             """
-            # query = """
-            # INSERT INTO dj (
-            #     dj_name, first_name, last_name, bio, location
-            # ) VALUES (%s, %s, %s, %s, %s);"
-            # """
             values = (
                 request.data.dj_name,
                 request.data.first_name,
@@ -139,64 +135,39 @@ class WriteService(write_service_pb2_grpc.WriteServiceServicer):
                 request.data.bio,
                 request.data.location,
                 request.data.email,
-                request.data.phone                
+                request.data.phone
             )
 
-            dj_id = write_to_db(query, *values)
+            dj_id = db_query(query, *values)
             if dj_id is None:
                 return write_service_pb2.CreateEntityResponse(success=False, message=f"DB Error: {err_msg}")
-            
-            # if request.data.HasField("social_data"):
-            #     print("Processing social data...")
-            #     social = request.data.social_data
 
-            #     connection = mysql.connector.connect(
-            #         user="root",
-            #         password="Root1234",
-            #         host="localhost",
-            #         database="yaya_dev"
-            #     )
-            #     cursor = connection.cursor()
-            #     cursor.execute(
-            #         """
-            #         INSERT INTO dj_socials (dj_id, website, soundcloud, spotify, facebook, instagram, snapchat, x) 
-            #         VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
-            #         """,
-            #         (dj_id,
-            #         social.website or None,
-            #         social.soundcloud or None,
-            #         social.spotify or None,
-            #         social.facebook or None,
-            #         social.instagram or None,
-            #         social.snapchat or None,
-            #         social.x or None)
-            #     )
-            #     cursor.close()
-            #     connection.close()
 
-                # query2 = """
-                # INSERT INTO dj_socials (dj_id, website, soundcloud, spotify, facebook, instagram, snapchat, x) 
-                # VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
-                # """
-                # values2 = (
-                #     dj_id,
-                #     social.website or None,
-                #     social.soundcloud or None,
-                #     social.spotify or None,
-                #     social.facebook or None,
-                #     social.instagram or None,
-                #     social.snapchat or None,
-                #     social.x or None
-                # )
-                # social_insert = write_to_db(query2, *values2)
-                # if social_insert is None:
-                #     return write_service_pb2.CreateEntityResponse(success=False, message="DB Error with social data")
+            if request.data.HasField("social_data"):
+                print("Processing social data...")
+                social = request.data.social_data
+
+                social_query = """
+                INSERT INTO dj_socials (dj_id, website, soundcloud, spotify, facebook, instagram, snapchat, x) 
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
+                """
+                social_values = (
+                    dj_id,
+                    social.website or None,
+                    social.soundcloud or None,
+                    social.spotify or None,
+                    social.facebook or None,
+                    social.instagram or None,
+                    social.snapchat or None,
+                    social.x or None
+                )
+
+                social_insert = db_query(social_query, *social_values)
+                if social_insert is None:
+                    return write_service_pb2.CreateEntityResponse(success=False, message="DB Error with social data")
 
             return write_service_pb2.CreateEntityResponse(success=True, message="DJ created!")
-        # except mysql.connector.Error as err:
-        #     print(f"Exception during writing: {err}")
-        #     return write_service_pb2.CreateEntityResponse(success=False, message=err)
-
+        
         except Exception as e:
             print(f"Exception during writing: {e}")
             return write_service_pb2.CreateEntityResponse(success=False, message=f"Exception during writing: {e}")
