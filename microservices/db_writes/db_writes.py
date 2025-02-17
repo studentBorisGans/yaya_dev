@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 GENDER_MAP = {0: "Male", 1: "Female", 2: "Other"}
 SPEND_CLASS_MAP = {0: "A", 1: "B", 2: "C", 3: "D", 4: "E"}
 
-pool = SimpleConnectionPool(1, 3, 
+pool = SimpleConnectionPool(1, 3,
     database="postgres",
     user="user",
     password="password",
@@ -30,7 +30,7 @@ def db_query(query: str, *params):
 
     try:
         with conn.cursor() as cursor:
-            print("Connection aqquired. Query to execute: \n")
+            print("Connection aqquired. Query to execute:")
             print(cursor.mogrify(query, params).decode())
 
             cursor.execute(query, params)
@@ -55,13 +55,13 @@ def db_query(query: str, *params):
         return None
     finally:
         pool.putconn(conn)
-        print("\nConnection returned to pool")
+        print("Connection returned to pool.\n")
     return result[0] or 1
 
 
 class WriteService(write_service_pb2_grpc.WriteServiceServicer):    
     def CreateEvent(self, request, context):
-        print(f"Received data: {request.data}")
+        print(f"\nReceived data: {request.data}")
         try:
             datetime = request.data.date.ToDatetime()
             datetime = datetime.replace(tzinfo=timezone.utc)
@@ -69,7 +69,7 @@ class WriteService(write_service_pb2_grpc.WriteServiceServicer):
 
             query = """
                 INSERT INTO event_data (organizer_id, venue_id, event_name, date, budget, pre_event_poster, pre_bio)
-                VALUES (%s, %s, %s, %s, %s, %s, %s);
+                VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id;
             """
             values = (
                 request.data.org_id,
@@ -149,7 +149,7 @@ class WriteService(write_service_pb2_grpc.WriteServiceServicer):
 
                 social_query = """
                 INSERT INTO dj_socials (dj_id, website, soundcloud, spotify, facebook, instagram, snapchat, x) 
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING dj_id;
                 """
                 social_values = (
                     dj_id,
@@ -178,7 +178,7 @@ class WriteService(write_service_pb2_grpc.WriteServiceServicer):
             query = """
             INSERT INTO venues (
                 name, capacity, address, city, state, zip, country, table_count
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id;
             """
 
             values = (
@@ -205,7 +205,7 @@ class WriteService(write_service_pb2_grpc.WriteServiceServicer):
             query = """
             INSERT INTO organizer (
                 name, first_name, last_name, email, phone, country, website
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s);
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id;
             """
 
             values = (
@@ -224,16 +224,14 @@ class WriteService(write_service_pb2_grpc.WriteServiceServicer):
         except Exception as e:
             print(f"Exception during writing: {e}")
             return write_service_pb2.CreateEntityResponse(success=False, message=f"Exception during writing: {e}")
+        
     def PublishEvent(self, request, context):
         print(f"Received data: {request.data}")
         try:
-            datetime = request.data.date.ToDatetime()
-            datetime = datetime.replace(tzinfo=timezone.utc)
-            postgre_datetime = datetime.isoformat()
 
             query = """
-                INSERT INTO published_event (event_id, dj_id, event_poster, bio)
-                VALUES (%s, %s, %s, %s);
+                INSERT INTO published_events (event_id, dj_id, event_poster, bio)
+                VALUES (%s, %s, %s, %s) RETURNING event_id;
             """
             values = (
                 request.data.event_id,
