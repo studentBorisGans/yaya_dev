@@ -12,6 +12,8 @@ db_pool = None
 # APP DEFINITION
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    print("Creating pool..")
+
     global db_pool
     db_pool = await asyncpg.create_pool(
         database="postgres",
@@ -20,7 +22,7 @@ async def lifespan(app: FastAPI):
         host="localhost",
         port=5433,
         min_size=3,
-        max_size=10
+        max_size=5
     )
     print("✅ Database pool created")
     
@@ -95,12 +97,12 @@ async def get_djs():
 @app.get("/event/{event_id}")
 async def get_event_details(event_id: int):
     """Fetch detailed event info including venue & organizer."""
-    
+
     query = """
     SELECT pe.*, v.*, o.*
-    FROM published_events pe
+    FROM event_data pe
     LEFT JOIN venues v ON pe.venue_id = v.id
-    LEFT JOIN organizers o ON pe.organizer_id = o.id
+    LEFT JOIN organizer o ON pe.organizer_id = o.id
     WHERE pe.id = $1
     """
     async with db_pool.acquire() as conn:

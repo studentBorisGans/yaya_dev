@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 GENDER_MAP = {0: "Male", 1: "Female", 2: "Other"}
 SPEND_CLASS_MAP = {0: "A", 1: "B", 2: "C", 3: "D", 4: "E"}
 
-pool = SimpleConnectionPool(1, 10, 
+pool = SimpleConnectionPool(1, 3, 
     database="postgres",
     user="user",
     password="password",
@@ -95,7 +95,7 @@ class WriteService(write_service_pb2_grpc.WriteServiceServicer):
             query = """
             INSERT INTO user_data(
                 username, first_name, last_name, email, location, language, gender, age, spend_class, pw
-            ) VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+            ) VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id;
             """
 
             values = (
@@ -221,6 +221,30 @@ class WriteService(write_service_pb2_grpc.WriteServiceServicer):
                 return write_service_pb2.CreateEntityResponse(success=False, message=f"DB Error: {err_msg}")
 
             return write_service_pb2.CreateEntityResponse(success=True, message="Organizer created!")
+        except Exception as e:
+            print(f"Exception during writing: {e}")
+            return write_service_pb2.CreateEntityResponse(success=False, message=f"Exception during writing: {e}")
+    def PublishEvent(self, request, context):
+        print(f"Received data: {request.data}")
+        try:
+            datetime = request.data.date.ToDatetime()
+            datetime = datetime.replace(tzinfo=timezone.utc)
+            postgre_datetime = datetime.isoformat()
+
+            query = """
+                INSERT INTO published_event (event_id, dj_id, event_poster, bio)
+                VALUES (%s, %s, %s, %s);
+            """
+            values = (
+                request.data.event_id,
+                request.data.dj_id,
+                request.data.event_poster,
+                request.data.bio
+            )
+            if db_query(query, *values) is None:
+                return write_service_pb2.CreateEntityResponse(success=False, message=f"DB Error: {err_msg}")
+
+            return write_service_pb2.CreateEntityResponse(success=True, message="Event published!")
         except Exception as e:
             print(f"Exception during writing: {e}")
             return write_service_pb2.CreateEntityResponse(success=False, message=f"Exception during writing: {e}")

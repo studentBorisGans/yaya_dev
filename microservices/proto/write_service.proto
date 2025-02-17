@@ -115,13 +115,24 @@ message CreateOrganizerRequest {
   OrganizerData data = 1;
 }
 
+message PublishData {
+  int32 event_id = 1;
+  int32 dj_id = 2;
+  string event_poster = 3;
+  string bio = 4;
+}
+
+message CreatePublishRequest {
+  PublishData data = 1;
+}
+
 service WriteService {
   rpc CreateEvent(CreateEventRequest) returns (CreateEntityResponse);
   rpc CreateUser(CreateUserRequest) returns (CreateEntityResponse);
   rpc CreateDj(CreateDJRequest) returns (CreateEntityResponse);
   rpc CreateVenue(CreateVenueRequest) returns (CreateEntityResponse);
   rpc CreateOrganizer(CreateOrganizerRequest) returns (CreateEntityResponse);
-
+  rpc PublishEvent(CreatePublishRequest) returns (CreateEntityResponse);
 }
 
 message CreateEntityResponse {

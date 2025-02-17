@@ -23,7 +23,7 @@ SECRET_KEYS = {
     "previous": "old_secret_key"
 }
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 1 #per half minute
+ACCESS_TOKEN_EXPIRE_MINUTES = 10
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 user_data = {}
 sensitive_data = {}
@@ -36,8 +36,8 @@ grpc_channel = grpc.insecure_channel("localhost:50051")
 grpc_stub = write_service_pb2_grpc.WriteServiceStub(grpc_channel)
 
 # FastAPI REST endpoint
-WRITE_SERVICE_REST_URL = "http://localhost:8001/write/"  
-DB_READER_SERVICE_URL = "bs"
+# WRITE_SERVICE_REST_URL = "http://localhost:8001/write/"
+DB_READER_SERVICE_URL = "http://localhost:8001"
 
 # APP DEFINITION
 @asynccontextmanager
@@ -104,12 +104,20 @@ def handle_org(data):
     response = grpc_stub.CreateOrganizer(request)
     return {"Success": response.success, "Message": response.message}
 
+def handle_publish(data):
+    print(f"Sync data: {data}")
+
+    request = write_service_pb2.CreatePublishRequest(data=data)
+    response = grpc_stub.PublishEvent(request)
+    return {"Success": response.success, "Message": response.message}
+
 type_handlers = {
     "event": handle_event,
     "venue": handle_venue,
     "user": handle_user,
     "dj": handle_dj,
-    "org": handle_org
+    "org": handle_org,
+    "publish_event": handle_publish
 }
 
 
@@ -294,7 +302,7 @@ async def essential_write(data: dict):
     if not user[0]:
         raise HTTPException(status_code=401, detail=user[1])
 
-    print(f"\nUser {user[1]['user_id']} writing to DB")
+    # print(f"\nUser {user[1]['user_id']} writing to DB")
     
     obj_type = data.get("type")
     obj_data = data.get("data")
