@@ -12,7 +12,7 @@ db_pool = None
 # APP DEFINITION
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("Creating pool..")
+    print("Creating pool...")
 
     global db_pool
     db_pool = await asyncpg.create_pool(

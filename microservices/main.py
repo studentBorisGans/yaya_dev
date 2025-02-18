@@ -39,6 +39,7 @@ grpc_stub = write_service_pb2_grpc.WriteServiceStub(grpc_channel)
 # WRITE_SERVICE_REST_URL = "http://localhost:8001/write/"
 DB_READER_SERVICE_URL = "http://localhost:8001"
 
+
 # APP DEFINITION
 @asynccontextmanager
 async def lifespan(app: FastAPI):
