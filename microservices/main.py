@@ -34,8 +34,8 @@ POSTGRE_READ_PORT = os.getenv("POSTGRE_READ_PORT")
 SECRET_KEY = os.getenv("SECRET_KEYS_CURRENT")
 SECRET_KEY_PREVIOUS = os.getenv("SECRET_KEYS_PREVIOUS")
 ALGORITHM = os.getenv("JWT_ALGORITHM")
-ACCESS_TOKEN_EXPIRE_MINUTES = os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES")
-REFRESH_TOKEN_EXPIRE_DAYS = os.getenv("REFRESH_TOKEN_EXPIRE_DAYS")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES"))
+REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS"))
 
 # GROC
 GRPC_INSC_CHANNEL = os.getenv("GRPC_INSC_CHANNEL")
@@ -262,7 +262,6 @@ async def login(creds: dict = Body(...)):
     sensitive_data['pw'] = pw
     print(f"\nUser data: {user_data}")
     print(f"\nSenitive data: {sensitive_data}")
-    print(ACCESS_TOKEN_EXPIRE_MINUTES)
 
     token = create_jwt(user_data, timedelta(minutes=int(ACCESS_TOKEN_EXPIRE_MINUTES)))
     refresh_token = create_refresh_token(user_data)
