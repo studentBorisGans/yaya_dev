@@ -1,24 +1,36 @@
-import psycopg2
 from psycopg2.pool import SimpleConnectionPool
-
-import grpc
-import time
+from dotenv import load_dotenv
 from concurrent import futures
-import write_service_pb2
-import write_service_pb2_grpc
 from grpc_reflection.v1alpha import reflection
 from google.protobuf.timestamp_pb2 import Timestamp
 from datetime import datetime, timezone
+import psycopg2
+import grpc
+import time
+import os
+import write_service_pb2
+import write_service_pb2_grpc
+
+
+POSTGRE_DB = os.getenv("POSTGRE_DB")
+POSTGRE_USER = os.getenv("POSTGRE_USER")
+POSTGRE_PW = os.getenv("POSTGRE_PW")
+POSTGRE_HOST = os.getenv("POSTGRE_HOST")
+POSTGRE_WRITE_PORT = os.getenv("POSTGRE_WRITE_PORT")
+
+GRPC_INSC_PORT = os.getenv("GRPC_INSC_PORT")
+
 
 GENDER_MAP = {0: "Male", 1: "Female", 2: "Other"}
 SPEND_CLASS_MAP = {0: "A", 1: "B", 2: "C", 3: "D", 4: "E"}
 
+
 pool = SimpleConnectionPool(1, 3,
-    database="postgres",
-    user="user",
-    password="password",
-    host="localhost",
-    port=5432
+    database=POSTGRE_DB,
+    user=POSTGRE_USER,
+    password=POSTGRE_PW,
+    host=POSTGRE_HOST,
+    port=POSTGRE_WRITE_PORT
 )
 err_msg = ""
 
@@ -257,9 +269,9 @@ def serve():
     )
     reflection.enable_server_reflection(SERVICE_NAMES, server)
 
-    server.add_insecure_port("[::]:50051")
+    server.add_insecure_port(GRPC_INSC_PORT)
     server.start()
-    print("gRPC server started on port 50051")
+    print(f"gRPC server started on port: {GRPC_INSC_PORT}")
 
     try:
         while True:

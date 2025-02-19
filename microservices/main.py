@@ -6,6 +6,8 @@ from typing import Dict, Optional
 from google.protobuf.timestamp_pb2 import Timestamp
 from contextlib import asynccontextmanager
 from db_writes import write_service_pb2, write_service_pb2_grpc
+from dotenv import load_dotenv
+import os
 import grpc
 import os
 import asyncio
@@ -17,14 +19,33 @@ import json
 import httpx
 # switch to pyodbc or asyncodbc for azure SQL
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key")
-SECRET_KEYS = {
-    "current": "new_secret_key",
-    "previous": "old_secret_key"
-}
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 10
-REFRESH_TOKEN_EXPIRE_DAYS = 7
+load_dotenv()
+
+
+# POSTGRE
+POSTGRE_DB = os.getenv("POSTGRE_DB")
+POSTGRE_USER = os.getenv("POSTGRE_USER")
+POSTGRE_PW = os.getenv("POSTGRE_PW")
+POSTGRE_HOST = os.getenv("POSTGRE_HOST")
+POSTGRE_WRITE_PORT = os.getenv("POSTGRE_WRITE_PORT")
+POSTGRE_READ_PORT = os.getenv("POSTGRE_READ_PORT")
+
+# JWT
+SECRET_KEY = os.getenv("SECRET_KEYS_CURRENT")
+SECRET_KEY_PREVIOUS = os.getenv("SECRET_KEYS_PREVIOUS")
+ALGORITHM = os.getenv("JWT_ALGORITHM")
+ACCESS_TOKEN_EXPIRE_MINUTES = os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES")
+REFRESH_TOKEN_EXPIRE_DAYS = os.getenv("REFRESH_TOKEN_EXPIRE_DAYS")
+
+# GROC
+GRPC_INSC_CHANNEL = os.getenv("GRPC_INSC_CHANNEL")
+
+# ENDPOINTS
+DB_READER_SERVICE_URL = os.getenv("DB_READER_SERVICE_URL")
+# WRITE_SERVICE_REST_URL = "http://localhost:8001/write/"
+
+
+
 user_data = {}
 sensitive_data = {}
 body_data = {}
@@ -32,12 +53,8 @@ db_pool = None
 
 
 # gRPC Channel to the write microservice
-grpc_channel = grpc.insecure_channel("localhost:50051")
+grpc_channel = grpc.insecure_channel(GRPC_INSC_CHANNEL)
 grpc_stub = write_service_pb2_grpc.WriteServiceStub(grpc_channel)
-
-# FastAPI REST endpoint
-# WRITE_SERVICE_REST_URL = "http://localhost:8001/write/"
-DB_READER_SERVICE_URL = "http://localhost:8001"
 
 
 # APP DEFINITION
@@ -45,11 +62,11 @@ DB_READER_SERVICE_URL = "http://localhost:8001"
 async def lifespan(app: FastAPI):
     global db_pool
     db_pool = await asyncpg.create_pool(
-        database="postgres",
-        user="user",
-        password="password",
-        host="localhost",
-        port=5433,
+        database=POSTGRE_DB,
+        user=POSTGRE_USER,
+        password=POSTGRE_PW,
+        host=POSTGRE_HOST,
+        port=POSTGRE_READ_PORT,
         min_size=1,
         max_size=3
     )
@@ -124,9 +141,10 @@ type_handlers = {
 
 # --------------- JWT Util Functions ----------------
 def rotate_keys():
-    SECRET_KEYS["previous"] = SECRET_KEYS["current"]  # Move current to previous
-    SECRET_KEYS["current"] = os.urandom(32).hex()  # Generate new key
-    print(f"New secret key: {SECRET_KEYS['current']}")
+    print("dont use this function")
+    # SECRET_KEYS["previous"] = SECRET_KEYS["current"]  # Move current to previous
+    # SECRET_KEYS["current"] = os.urandom(32).hex()  # Generate new key
+    # print(f"New secret key: {SECRET_KEYS['current']}")
 
 def create_jwt(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = {}
@@ -145,16 +163,16 @@ def create_jwt(data: dict, expires_delta: Optional[timedelta] = None):
 
     to_encode['data'] = bytes
 
-    return jwt.encode(to_encode, SECRET_KEYS["current"], algorithm=ALGORITHM)
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 def create_refresh_token(data: dict):
     expire = int((datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)).timestamp())
     to_encode = {"exp": expire, **data}
-    return jwt.encode(to_encode, SECRET_KEYS["current"], algorithm=ALGORITHM)
+    return jwt.encode(to_encode, SECRET_KEY_PREVIOUS, algorithm=ALGORITHM)
 
 def decode_jwt(token: str) -> Dict:
     try:
-        payload = jwt.decode(token, SECRET_KEYS["current"], algorithms=[ALGORITHM])
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         exp = payload.get("exp")
         current_time = int(datetime.now(timezone.utc).timestamp())
         print(f"Time to expiration: {exp - current_time}")
@@ -172,7 +190,7 @@ def decode_jwt(token: str) -> Dict:
         # raise HTTPException(status_code=401, detail="Token has expired")
     except JWTError:
         try:
-            payload = jwt.decode(token, SECRET_KEYS["previous"], algorithms=[ALGORITHM])
+            payload = jwt.decode(token, SECRET_KEY_PREVIOUS, algorithms=[ALGORITHM])
             decoded = json.loads(base64.b64decode(payload["data"]).decode("utf-8"))
 
             print(f"Payload at decoding: {payload}")
@@ -185,13 +203,13 @@ def decode_jwt(token: str) -> Dict:
     
 def verify_refresh_token(refresh_token: str):
     try:
-        payload = jwt.decode(refresh_token, SECRET_KEYS["current"], algorithms=[ALGORITHM])
+        payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
         print(f"\nPayload: {payload}")
         return (True, payload)
     except JWTError as err:
         print(f"\nError: {err}")
         try:
-            payload = jwt.decode(refresh_token, SECRET_KEYS["previous"], algorithms=[ALGORITHM])
+            payload = jwt.decode(refresh_token, SECRET_KEY_PREVIOUS, algorithms=[ALGORITHM])
             return (True, payload)
         except:
             return (False, "Invalid token")
@@ -204,38 +222,10 @@ def verify_refresh_token(refresh_token: str):
 #     return jwt.encode(data, SECRET_KEYS, algorithm=ALGORITHM)
 # should have same expiry as user's token
 
-
-# @app.on_event("startup")
-# async def startup():
-#     global db_pool
-#     db_pool = await asyncpg.create_pool(
-#         database="postgres",
-#         user="user",
-#         password="password",
-#         host="localhost",
-#         port=5433,
-#         min_size=1,
-#         max_size=5
-#     )
-#     print("✅ Database pool created")
-
-# @app.on_event("shutdown")
-# async def shutdown():
-#     global db_pool
-#     if db_pool:
-#         await db_pool.close()
-#         print("🛑 Database pool closed")
-
 # async def create_pool():
 #     try:
 #         pool = await aiomysql.create_pool(
-#             host="localhost",
-#             user="root",
-#             password="Root1234",
-#             db="yaya_dev",
-#             autocommit=True,
-#             minsize=1,
-#             maxsize=3
+#             empty
 #         )
 #         return pool
 #     except aiomysql.Error as e:
@@ -272,8 +262,9 @@ async def login(creds: dict = Body(...)):
     sensitive_data['pw'] = pw
     print(f"\nUser data: {user_data}")
     print(f"\nSenitive data: {sensitive_data}")
+    print(ACCESS_TOKEN_EXPIRE_MINUTES)
 
-    token = create_jwt(user_data, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    token = create_jwt(user_data, timedelta(minutes=int(ACCESS_TOKEN_EXPIRE_MINUTES)))
     refresh_token = create_refresh_token(user_data)
     return {"access_token": token, "refresh_token": refresh_token}
 
@@ -317,8 +308,8 @@ async def background_write(data: dict):
     Calls the REST API service for background writes.
     """
     print(f"Background data: {data}")
-    response = requests.post(WRITE_SERVICE_REST_URL, json={"data": data["data"], "priority": False})
-    return response.json()
+    # response = requests.post(WRITE_SERVICE_REST_URL, json={"data": data["data"], "priority": False})
+    # return response.json()
 
 
 # --------------- Streaming Read Endpoints ----------------

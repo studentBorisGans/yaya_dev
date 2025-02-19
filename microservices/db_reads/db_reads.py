@@ -1,10 +1,19 @@
 from fastapi import FastAPI, Query
 from fastapi.responses import StreamingResponse, JSONResponse
+from dotenv import load_dotenv
+from contextlib import asynccontextmanager
 import asyncpg
 import asyncio
 import json
-from contextlib import asynccontextmanager
+import os
 
+load_dotenv()
+
+POSTGRE_DB = os.getenv("POSTGRE_DB")
+POSTGRE_USER = os.getenv("POSTGRE_USER")
+POSTGRE_PW = os.getenv("POSTGRE_PW")
+POSTGRE_HOST = os.getenv("POSTGRE_HOST")
+POSTGRE_READ_PORT = os.getenv("POSTGRE_READ_PORT")
 
 db_pool = None
 
@@ -16,11 +25,11 @@ async def lifespan(app: FastAPI):
 
     global db_pool
     db_pool = await asyncpg.create_pool(
-        database="postgres",
-        user="user",
-        password="password",
-        host="localhost",
-        port=5433,
+        database=POSTGRE_DB,
+        user=POSTGRE_USER,
+        password=POSTGRE_PW,
+        host=POSTGRE_HOST,
+        port=POSTGRE_READ_PORT,
         min_size=3,
         max_size=5
     )
@@ -32,35 +41,6 @@ async def lifespan(app: FastAPI):
     print("🛑 Database pool closed")
 
 app = FastAPI(lifespan=lifespan)
-
-
-# async def init_db():
-#     global db_pool
-#     db_pool = await asyncpg.create_pool(
-#         database="postgres",
-#         user="user",
-#         password="password",
-#         host="localhost",
-#         port=5433,
-#         min_size=1,
-#         max_size=5
-#     )
-#     print("✅ Database pool created")
-
-# async def close_db():
-#     global db_pool
-#     if db_pool:
-#         await db_pool.close()
-#         print("🛑 Database pool closed")
-
-# @app.on_event("startup")
-# async def startup():
-#     await init_db()
-
-# @app.on_event("shutdown")
-# async def shutdown():
-#     await close_db()
-
 
 
 # --------------- Streaming Endpoints ----------------
